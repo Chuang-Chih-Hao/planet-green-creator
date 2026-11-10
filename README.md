@@ -53,6 +53,8 @@
 - **測試修正追加**：同一段闖關整合測試從建造切換至宇宙事件時，也需保留 450 毫秒防連點間隔；已對事件作答模擬加入 480 毫秒等待，確保測試以真實可行的互動節奏執行。檔案：`tests/integration.test.js`。
 - **測試與部署**：已更新 `tests/game.test.js`、`tests/integration.test.js`；GitHub Actions 與 Render 的實際驗證結果將以提交後狀態更新。
 
+- **V1.3 最終驗證（2026-11-11 01:00 台灣時間）**：GitHub Actions [Planet Green Tests](https://github.com/Chuang-Chih-Hao/planet-green-creator/actions/runs/42860358024) 執行 `npm test`，共 **18 項通過、0 項失敗**，前端與伺服器語法檢查成功。Render 已將程式版本 `2ccf526` 部署為 **Live**；網址 https://planet-green-creator.onrender.com 。本次 README 補記會再觸發一次自動部署（執行碼不變）。
+
 ### V1.2.0 — 2026-11-11
 
 - **1｜進度起始值**：開局與重設時無建築進度固定 0%，並加入獨立星球生命指數。檔案：`server/modes-v2.js`、`server/game.js`、`client/app.js`。
