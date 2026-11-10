@@ -15,6 +15,7 @@ async function doTask(host,student,kind){
  const p=(await state(host)).players.find(p=>p.id===chosen.state.myId);
  const reveal=await post('action',{token:host,action:'revealAnswer',playerId:p.id,taskId:p.task.id});
  assert.equal(reveal.status,200);
+ await new Promise(resolve=>setTimeout(resolve,480)); // 模擬正常作答間隔，避免防連點限制。
  return post('action',{token:student,action:'answer',taskId:p.task.id,formula:reveal.feedback.formula,answer:reveal.feedback.answer,unit:reveal.feedback.unit});
 }
 test('首頁、星球動畫前端、個人計算紙與 health 端點可載入',async()=>{
