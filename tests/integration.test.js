@@ -12,7 +12,7 @@ async function post(path, body) {
 }
 
 test('首頁、health 與靜態檔案可提供', async () => {
-  for (const path of ['/', '/app.js', '/style.css', '/favicon.svg', '/api/health']) {
+  for (const path of ['/', '/app.js', '/scratchpad.js', '/style.css', '/favicon.svg', '/api/health']) {
     const res = await fetch(base + path);
     assert.equal(res.status, 200, `${path} should exist`);
   }
@@ -60,15 +60,19 @@ test('房主建立房間、4 名學生加入、開始遊戲、同步答題，且
   assert.equal(denied.status, 403);
   const event = await post('action', { token: hostToken, action: 'event', eventId: 'alien' });
   assert.equal(event.state.event.id, 'alien');
-  const eventDone = await post('action', { token: studentToken, action: 'eventAnswer', formula: 'circumference', answer: '56.52', unit: 'km' });
+  const eventKey = await post('action', { token:hostToken, action:'revealAnswer', scope:'event' });
+  assert.equal(eventKey.status,200);
+  const eventDone = await post('action', { token: studentToken, action: 'eventAnswer', formula: eventKey.feedback.formula, answer: eventKey.feedback.answer, unit: eventKey.feedback.unit });
   assert.equal(eventDone.feedback.correct, true);
   assert.equal(eventDone.state.event, null);
-  assert.equal(eventDone.state.resources.energy, 59);
+  assert.equal(eventDone.state.resources.energy, 29);
   const ending = await post('action', { token: hostToken, action: 'finish' });
   assert.equal(ending.state.phase, 'finished');
   const reset = await post('action', { token: hostToken, action: 'reset' });
   assert.equal(reset.state.phase, 'lobby');
   assert.equal(reset.state.players.length, 5);
+  assert.equal(reset.state.progress,0);
+  assert.equal(reset.state.resources.energy,25);
 });
 
 test('SSE 訂閱可收到房間更新，供多人即時同步', async () => {
@@ -132,7 +136,8 @@ test('房主可設定三種遊戲模式，開始後不能變更，且僅教師�
  assert.equal(denied.status,403);
  const answer=await post('action',{token:host,action:'revealAnswer',scope:'event'});
  assert.equal(answer.status,200);
- assert.equal(answer.feedback.answer,125.6);
+ assert.ok(Number.isFinite(answer.feedback.answer));
+ assert.ok(['ring','area','reverseArea','reverseCirc','circumference'].includes(answer.feedback.formula));
  const modeLocked=await post('action',{token:host,action:'settings',gameMode:'growth'});
  assert.equal(modeLocked.state.gameMode,'survival');
  const skipped=await post('action',{token:host,action:'skipEvent'});

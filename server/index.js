@@ -142,8 +142,7 @@ async function api(req, res, pathname, searchParams) {
       let task;
       if (body.scope === 'event') {
         if (!room.event) throw new HttpError('目前沒有事件題目');
-        const { EVENTS } = await import('./game.js');
-        task = EVENTS[room.event.id];
+        task = room.event.task; // 每場隨機題目的答案只回傳給房主
       } else {
         const player = room.players.find(p => p.id === body.playerId);
         if (!player?.task || (body.taskId && body.taskId !== player.task.id)) throw new HttpError('題目已更新，請重新查看');
