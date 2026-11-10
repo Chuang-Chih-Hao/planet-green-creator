@@ -1,4 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { makeVariedTask } from './tasks-v2.js';
+import { GAME_MODES, modeGoalList, modeProgress, HAZARD_INFO } from './modes-v2.js';
 
 export const MAX_PLAYERS = 5;
 export const PI = 3.14;
@@ -7,7 +9,8 @@ export const FORMULAS = [
   { id: 'area', text: 'π × 半徑 × 半徑' },
   { id: 'circumference', text: '2 × π × 半徑（或 π × 直徑）' },
   { id: 'ring', text: '大圓面積 − 小圓面積' },
-  { id: 'reverse', text: '面積 ÷ π，再找半徑' }
+  { id: 'reverseArea', text: '圓面積 ÷ π = 半徑 × 半徑' },
+  { id: 'reverseCirc', text: '圓周長 ÷ (2 × π) = 半徑' }
 ];
 export const KIND_INFO = {
   forest: { title: '生態造林', emoji: '🌳', color: '#3fe5aa', resource: '氧氣' },
@@ -24,8 +27,8 @@ export function cleanName(name) {
 }
 
 export function goalForCount(n, durationMinutes = 40) {
-  // 每人平均工作量相同；40 分鐘完整局需要 5 項/人，25 分鐘 3 項/人，15 分鐘 2 項/人。
-  const perPlayer = durationMinutes >= 40 ? 5 : durationMinutes >= 25 ? 3 : 2;
+  // 三種課堂時長各自分配 3、5、8 題／人；至少四項才能涵蓋不同工程。
+  const perPlayer = durationMinutes >= 40 ? 8 : durationMinutes >= 25 ? 5 : 3;
   return Math.max(4, perPlayer * Math.min(MAX_PLAYERS, Math.max(1, n)));
 }
 
@@ -39,64 +42,8 @@ export function newCode(existing = new Set()) {
   throw new Error('無法建立房間代碼');
 }
 
-export function makeTask(kind = 'forest', difficulty = 'standard', rng = Math.random) {
-  if (!TASK_KINDS.includes(kind)) throw new Error('無效的任務類型');
-  const advanced = difficulty === 'advanced';
-  const standard = difficulty !== 'basic';
-  let question, answer, formula, unit, steps, hint, title, context;
-  if (kind === 'forest') {
-    const reverse = standard && rng() < (advanced ? .55 : .35);
-    if (reverse) {
-      const radius = choice([4, 5, 6, 8, 10], rng);
-      const area = round2(PI * radius * radius);
-      question = `造林區需要 ${fmt(area)} 平方公里的森林。圓形造林機的半徑應設定為幾公里？`;
-      answer = radius; formula = 'reverse'; unit = 'km';
-      steps = [`圓面積 = 3.14 × 半徑 × 半徑`, `半徑 × 半徑 = ${fmt(area)} ÷ 3.14 = ${radius * radius}`, `半徑 = ${radius} 公里`];
-      hint = '先把面積除以 3.14，再找哪個數乘自己等於商。';
-      title = '逆推造林半徑';
-    } else {
-      const radius = choice(advanced ? [7, 9, 11, 12] : [3, 4, 5, 6, 8, 10], rng);
-      question = `新森林規劃成半徑 ${radius} 公里的圓形區域。需要規劃幾平方公里？`;
-      answer = round2(PI * radius * radius); formula = 'area'; unit = 'km²';
-      steps = [`圓面積 = 3.14 × ${radius} × ${radius}`, `= ${fmt(answer)} 平方公里`];
-      hint = '用圓面積公式，注意半徑必須乘兩次。';
-      title = '啟動森林培育機';
-    }
-    context = '計算正確，造林機才能在星球上種下森林。';
-  } else if (kind === 'orbit') {
-    const diameter = standard && rng() < (advanced ? .35 : .25);
-    if (diameter) {
-      const d = choice([10, 12, 14, 16, 18], rng);
-      question = `防禦衛星要沿著直徑 ${d} 公里的圓形軌道飛行一圈，軌道全長是多少公里？`;
-      answer = round2(PI * d); formula = 'circumference'; unit = 'km';
-      steps = [`圓周長 = 3.14 × 直徑`, `= 3.14 × ${d} = ${fmt(answer)} 公里`];
-      hint = '題目給的是直徑，可直接用 π × 直徑。';
-      title = '部署巡航衛星';
-    } else {
-      const r = choice(advanced ? [7, 9, 11] : [4, 5, 6, 8, 10], rng);
-      const gap = choice(advanced ? [3, 4] : [2, 3], rng);
-      const orbitalRadius = r + gap;
-      question = `星球半徑是 ${r} 公里，衛星軌道距離地表 ${gap} 公里。衛星繞行一周需要飛行幾公里？`;
-      answer = round2(2 * PI * orbitalRadius); formula = 'circumference'; unit = 'km';
-      steps = [`軌道半徑 = ${r} + ${gap} = ${orbitalRadius} 公里`, `圓周長 = 2 × 3.14 × ${orbitalRadius}`, `= ${fmt(answer)} 公里`];
-      hint = '軌道半徑是「星球半徑＋離地高度」，不是只用離地高度。';
-      title = '建置星環軌道';
-    }
-    context = '軌道總長度正確，衛星才能穩定巡航。';
-  } else {
-    const pairs = advanced ? [[12, 7], [13, 9], [14, 8], [11, 6]] : [[8, 5], [9, 6], [10, 6], [7, 3], [12, 10]];
-    const [outer, inner] = choice(pairs, rng);
-    question = `隕石坑外圈半徑 ${outer} 公里，中央保留區半徑 ${inner} 公里。兩圓之間的環狀區域需要修復幾平方公里？`;
-    answer = round2(PI * (outer ** 2 - inner ** 2)); formula = 'ring'; unit = 'km²';
-    steps = [`圓環面積 = 大圓面積 − 小圓面積`, `= 3.14 × (${outer} × ${outer} − ${inner} × ${inner})`, `= ${fmt(answer)} 平方公里`];
-    hint = '不是把兩個半徑相減後直接平方；要先算大圓與小圓的面積差。';
-    title = '修復環形隕石坑';
-    context = '算出需要填補的面積，才能修復星球地表。';
-  }
-  return {
-    id: randomUUID(), kind, title, question, context, formula, unit, answer, hint, steps,
-    difficulty, pi: PI
-  };
+export function makeTask(kind = 'forest', difficulty = 'standard', rng = Math.random, excludeVariant = null) {
+  return makeVariedTask(kind, difficulty, rng, excludeVariant);
 }
 
 export const EVENTS = {
@@ -134,6 +81,14 @@ export const EVENTS = {
   }
 };
 
+// 事件發生當下就對星球產生可見、可計算的衝擊；失敗後會留下待修復異常。
+const IMPACTS = { meteor: { stability: -12 }, flare: { energy: -14 }, rain: { water: 10, stability: -7 }, alien: { energy: -9 } };
+for (const [id, event] of Object.entries(EVENTS)) {
+  event.impact = IMPACTS[id];
+  event.repairKind = HAZARD_INFO[id].repairKind;
+  event.description += ` 即時影響：${Object.entries(IMPACTS[id]).map(([k,v]) => `${({stability:'穩定度',energy:'能源',water:'水資源'})[k]} ${v > 0 ? '+' : ''}${v}`).join('，')}。未解除會留下持續異常。`;
+}
+
 const clamp = n => Math.max(0, Math.min(100, n));
 
 export function adjustResources(resources, effect) {
@@ -147,9 +102,10 @@ export function createRoom(code, hostName = '老師', options = {}) {
     code, hostName: cleanName(hostName) || '老師', hostToken: randomUUID() + randomUUID(),
     createdAt: Date.now(), updatedAt: Date.now(), phase: 'lobby', paused: false,
     durationMinutes: options.durationMinutes || 40, remainingSeconds: (options.durationMinutes || 40) * 60,
-    eventsEnabled: true, difficulty: 'standard', players: [], history: [], structures: [],
+    eventsEnabled: true, difficulty: 'standard', gameMode: 'growth', players: [], history: [], structures: [],
+    hazards: [], eventsWon: 0, tickCount: 0,
     event: null, eventIndex: 0, lastEventId: null, eventCountdown: 110, startingPlayers: 0,
-    requiredBuildings: 4, resources: { oxygen: 20, water: 20, energy: 24, stability: 80 },
+    requiredBuildings: 4, resources: { oxygen: 20, water: 30, energy: 55, stability: 70 },
     completed: { forest: 0, orbit: 0, crater: 0 }, result: null
   };
 }
@@ -161,7 +117,7 @@ export function addPlayer(room, nickname) {
   if (room.players.some(p => p.name === name)) throw new Error('這個暱稱已有人使用');
   const player = {
     id: randomUUID(), token: randomUUID() + randomUUID(), name, connected: true,
-    joinedAt: Date.now(), selectedKind: 'forest', task: makeTask('forest', room.difficulty),
+    joinedAt: Date.now(), selectedKind: 'forest', task: makeTask('forest', room.difficulty), lastVariants: {},
     answered: 0, correct: 0, hints: 0, mistakes: { formula: 0, value: 0, unit: 0 },
     lastAnswerAt: 0, hintUsed: false, stars: 0
   };
@@ -177,7 +133,10 @@ export function startRoom(room) {
   room.requiredBuildings = goalForCount(room.startingPlayers, room.durationMinutes);
   room.remainingSeconds = room.durationMinutes * 60;
   room.eventCountdown = 110;
-  for (const player of room.players) player.task = makeTask(player.selectedKind, room.difficulty);
+  for (const player of room.players) {
+    player.task = makeTask(player.selectedKind, room.difficulty, Math.random, player.lastVariants[player.selectedKind]);
+    player.lastVariants[player.selectedKind] = player.task.variant;
+  }
   log(room, 'system', `任務啟動：${room.startingPlayers} 人模式，需完成 ${room.requiredBuildings} 項建造並涵蓋三類工程。`);
 }
 
@@ -214,11 +173,22 @@ export function buildResult(room, player, submitted) {
   const earned = player.hintUsed ? 8 : 12;
   player.stars += earned;
   const changes = {
-    forest: { oxygen: 16, water: -3 },
-    orbit: { energy: -4, stability: 8 },
-    crater: { energy: -3, water: 7, stability: 10 }
+    forest: { oxygen: 8, water: -3 },
+    orbit: { energy: 5, stability: 4 },
+    crater: { energy: -2, water: 7, stability: 6 }
   };
   adjustResources(room.resources, changes[task.kind]);
+  // 異常會持續削減資源，直到對應工程被完成；即使事件倒數已結束仍有效。
+  for (const hazard of room.hazards) {
+    const effect = HAZARD_INFO[hazard.id];
+    adjustResources(room.resources, { [effect.effectKey]: -effect.loss });
+  }
+  const repaired = room.hazards.filter(h => h.status === 'lingering' && HAZARD_INFO[h.id].repairKind === task.kind);
+  for (const hazard of repaired) {
+    adjustResources(room.resources, HAZARD_INFO[hazard.id].repairBonus);
+    log(room, 'success', `${player.name} 的工程修復了「${hazard.name}」留下的異常。`);
+  }
+  room.hazards = room.hazards.filter(h => !repaired.includes(h));
   room.completed[task.kind]++;
   const structure = {
     id: randomUUID(), kind: task.kind, owner: player.name, x: 12 + Math.random() * 76,
@@ -226,19 +196,17 @@ export function buildResult(room, player, submitted) {
   };
   room.structures.push(structure);
   log(room, 'build', `${player.name} 完成「${task.title}」，星球新增${KIND_INFO[task.kind].title}！`, { player: player.name, kind: task.kind, answer: task.answer, unit: task.unit, steps: task.steps });
-  player.task = makeTask(player.selectedKind, room.difficulty);
+  player.task = makeTask(player.selectedKind, room.difficulty, Math.random, task.variant);
   player.hintUsed = false;
   const finished = checkWin(room);
   return { correct: true, message: '建造成功！', stars: earned, steps: task.steps, answer: task.answer, unit: task.unit, kind: task.kind, finished };
 }
 
 export function checkWin(room) {
-  const count = room.structures.length;
-  const diversified = TASK_KINDS.every(kind => room.completed[kind] > 0);
-  if (room.phase === 'playing' && room.players.length > 0 && count >= room.requiredBuildings && diversified) {
-    room.phase = 'finished'; room.paused = false; room.event = null;
-    room.result = { win: true, title: '生命核心啟動成功！', description: '團隊完成三種工程，荒蕪星球已轉變為生態家園。' };
-    log(room, 'victory', '🌍 全隊成功綠化星球，生命核心已啟動！');
+  if (room.phase === 'playing' && room.players.length > 0 && !room.event && modeGoalList(room).every(goal => goal.met)) {
+    room.phase = 'finished'; room.paused = false;
+    room.result = { win: true, title: '生命核心啟動成功！', description: `成功完成「${GAME_MODES[room.gameMode].title}」挑戰，星球進入生命時代。` };
+    log(room, 'victory', '🌍 全隊完成星球建設及生態挑戰，生命核心已啟動！');
     return true;
   }
   return false;
@@ -252,8 +220,11 @@ export function triggerEvent(room, selectedId) {
   const event = EVENTS[id];
   room.eventIndex++; room.lastEventId = id;
   room.eventCountdown = 120;
-  room.event = { id, secondsLeft: 90, startedAt: Date.now(), attempts: 0 };
-  log(room, 'event', `${event.emoji} 宇宙事件：${event.name}！全隊一起解題！`);
+  const hazardId = randomUUID();
+  adjustResources(room.resources, event.impact);
+  room.hazards.push({ key: hazardId, id, name: event.name, emoji: event.emoji, status: 'active', ...HAZARD_INFO[id] });
+  room.event = { id, hazardId, secondsLeft: 90, startedAt: Date.now(), attempts: 0 };
+  log(room, 'event', `${event.emoji} 宇宙事件：${event.name}！星球已遭受衝擊，請立即解題！`);
   return id;
 }
 
@@ -279,7 +250,10 @@ export function solveEvent(room, player, submitted) {
   player.correct++;
   player.stars += 15;
   adjustResources(room.resources, def.reward);
+  room.hazards = room.hazards.filter(h => h.key !== room.event.hazardId);
+  room.eventsWon++;
   room.event = null;
+  checkWin(room);
   log(room, 'success', `${player.name} 解決「${def.name}」，全隊獲得補給！`, { player: player.name, event: def.name, answer: def.answer, unit: def.unit, steps: def.steps });
   return { correct: true, message: `事件解除！${def.name} 挑戰成功`, stars: 15, steps: def.steps, answer: def.answer, unit: def.unit };
 }
@@ -289,7 +263,9 @@ export function failEvent(room) {
   const def = EVENTS[room.event.id];
   // 小組與單人模式受到相同的輕度影響，避免人數少時更難完成任務。
   adjustResources(room.resources, def.penalty);
-  log(room, 'warning', `${def.name} 時間結束，資源略有損失；建築不會消失。`, { event: def.name });
+  const hazard = room.hazards.find(h => h.key === room.event.hazardId);
+  if (hazard) hazard.status = 'lingering';
+  log(room, 'warning', `${def.name} 未解除，星球留下異常！完成${KIND_INFO[def.repairKind].title}可修復。`, { event: def.name });
   room.event = null;
 }
 
@@ -303,12 +279,13 @@ export function finishRoom(room, reason = '老師已結束本局') {
 export function resetRoom(room) {
   room.phase = 'lobby'; room.paused = false; room.remainingSeconds = room.durationMinutes * 60;
   room.event = null; room.eventIndex = 0; room.lastEventId = null; room.eventCountdown = 110;
+  room.hazards = []; room.eventsWon = 0; room.tickCount = 0;
   room.structures = []; room.completed = { forest: 0, orbit: 0, crater: 0 };
-  room.resources = { oxygen: 20, water: 20, energy: 24, stability: 80 };
+  room.resources = { oxygen: 20, water: 30, energy: 55, stability: 70 };
   room.result = null; room.startingPlayers = 0; room.requiredBuildings = goalForCount(room.players.length, room.durationMinutes);
   room.history = [];
   for (const p of room.players) {
-    p.selectedKind = 'forest'; p.task = makeTask('forest', room.difficulty);
+    p.selectedKind = 'forest'; p.task = makeTask('forest', room.difficulty); p.lastVariants = {}; 
     p.answered = 0; p.correct = 0; p.hints = 0; p.stars = 0;
     p.lastAnswerAt = 0; p.hintUsed = false; p.mistakes = { formula: 0, value: 0, unit: 0 };
   }
@@ -318,6 +295,11 @@ export function resetRoom(room) {
 export function tick(room) {
   if (room.phase !== 'playing' || room.paused) return false;
   room.remainingSeconds = Math.max(0, room.remainingSeconds - 1);
+  room.tickCount++;
+  if (room.gameMode === 'survival' && room.tickCount % 45 === 0) {
+    adjustResources(room.resources, { water: -1, energy: -1 });
+    log(room, 'warning', '危機守護：維生系統持續消耗 1 水資源與 1 能源。');
+  }
   if (room.event) {
     room.event.secondsLeft--;
     if (room.event.secondsLeft <= 0) failEvent(room);
@@ -337,21 +319,24 @@ export function publicState(room, token) {
   const diversified = TASK_KINDS.every(kind => room.completed[kind] > 0);
   const eventDefinition = room.event ? EVENTS[room.event.id] : null;
   const event = room.event ? { ...room.event, ...eventDefinition } : null;
-  if (event && !isHost) { delete event.answer; delete event.steps; delete event.reward; delete event.penalty; }
+  if (event) { delete event.answer; delete event.steps; } // 教師必須主動按「顯示答案」，預設分享畫面不洩漏。
   const students = room.players.map(p => ({
     id: p.id, name: p.name, connected: p.connected, correct: p.correct, answered: p.answered,
     stars: p.stars, selectedKind: p.selectedKind, hints: isHost ? p.hints : undefined,
-    mistakes: isHost ? p.mistakes : undefined
+    mistakes: isHost ? p.mistakes : undefined,
+    task: isHost && p.task ? { id: p.task.id, title: p.task.title, question: p.task.question, variant: p.task.variant, kind: p.task.kind } : undefined
   }));
   return {
     code: room.code, hostName: room.hostName, role: isHost ? 'host' : 'student',
     myId: me?.id ?? null, phase: room.phase, paused: room.paused,
     durationMinutes: room.durationMinutes, remainingSeconds: room.remainingSeconds,
-    difficulty: room.difficulty, eventsEnabled: room.eventsEnabled,
+    difficulty: room.difficulty, eventsEnabled: room.eventsEnabled, gameMode: room.gameMode,
+    modeInfo: GAME_MODES[room.gameMode], goals: modeGoalList(room), eventsWon: room.eventsWon,
+    hazards: room.hazards.map(h => ({ id:h.id, name:h.name, emoji:h.emoji, notice:h.notice, status:h.status, repairKind:h.repairKind })),
     players: students, maxPlayers: MAX_PLAYERS, startingPlayers: room.startingPlayers,
     requiredBuildings: room.requiredBuildings, resources: room.resources,
     completed: room.completed, structures: room.structures, buildingsTotal: total,
-    allKindsComplete: diversified, progress: Math.min(100, Math.round(total / room.requiredBuildings * 100)),
+    allKindsComplete: diversified, progress: modeProgress(room),
     event, eventCountdown: room.eventCountdown, result: room.result,
     history: room.history.slice(0, isHost ? 100 : 14),
     ownTask: me?.task ? { ...me.task, answer: undefined, steps: undefined } : null,

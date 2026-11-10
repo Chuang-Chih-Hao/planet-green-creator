@@ -32,13 +32,22 @@ test('房主建立房間、4 名學生加入、開始遊戲、同步答題，且
   }
   const start = await post('action', { token: hostToken, action: 'start' });
   assert.equal(start.state.startingPlayers, 4);
-  assert.equal(start.state.requiredBuildings, 20);
+  assert.equal(start.state.requiredBuildings, 32);
   assert.equal(start.state.phase, 'playing');
   const late = await post('join', { name: '補位同學', code });
   assert.equal(late.status, 200);
   const full = await post('join', { name: '第六位學生', code });
   assert.equal(full.status, 400);
+  // 教師查看正在作答的即時題目，答案須另外驗證權限、明確按鈕索取。
+  const hostBefore = await fetch(`${base}/api/state?token=${hostToken}`).then(r=>r.json());
+  assert.equal(hostBefore.state.players[0].task.answer, undefined);
+  assert.ok(hostBefore.state.players[0].task.question);
+  const reveal = await post('action', {token:hostToken, action:'revealAnswer', playerId:hostBefore.state.players[0].id,taskId:hostBefore.state.players[0].task.id});
+  assert.equal(reveal.status,200);
+  assert.ok(Number.isFinite(reveal.feedback.answer));
   const studentToken = students[0].token;
+  const deniedReveal = await post('action', {token:studentToken, action:'revealAnswer',playerId:hostBefore.state.players[0].id});
+  assert.equal(deniedReveal.status,403);
   const stateRes = await fetch(`${base}/api/state?token=${encodeURIComponent(studentToken)}`);
   const studentState = (await stateRes.json()).state;
   assert.equal(studentState.role, 'student');
@@ -54,7 +63,7 @@ test('房主建立房間、4 名學生加入、開始遊戲、同步答題，且
   const eventDone = await post('action', { token: studentToken, action: 'eventAnswer', formula: 'circumference', answer: '56.52', unit: 'km' });
   assert.equal(eventDone.feedback.correct, true);
   assert.equal(eventDone.state.event, null);
-  assert.equal(eventDone.state.resources.energy, 37);
+  assert.equal(eventDone.state.resources.energy, 59);
   const ending = await post('action', { token: hostToken, action: 'finish' });
   assert.equal(ending.state.phase, 'finished');
   const reset = await post('action', { token: hostToken, action: 'reset' });
@@ -94,15 +103,39 @@ test('四人局有人正式離開後會降為三人目標，原暱稱可以再�
   const students = [];
   for (let i = 1; i <= 4; i++) students.push(await post('join', { code: created.state.code, name: `試玩學生${i}` }));
   const begin = await post('action', { token: created.token, action: 'start' });
-  assert.equal(begin.state.requiredBuildings, 20);
+  assert.equal(begin.state.requiredBuildings, 32);
   const left = await post('action', { token: students[0].token, action: 'leave' });
   assert.equal(left.status, 200);
   assert.equal(left.left, true);
   const hostState = await fetch(`${base}/api/state?token=${created.token}`).then(r => r.json());
   assert.equal(hostState.state.players.length, 3);
-  assert.equal(hostState.state.requiredBuildings, 15);
+  assert.equal(hostState.state.requiredBuildings, 24);
   const rejoin = await post('join', { code: created.state.code, name: '試玩學生1' });
   assert.equal(rejoin.status, 200);
   assert.equal(rejoin.state.players.length, 4);
-  assert.equal(rejoin.state.requiredBuildings, 15, '遲到玩家加入不應提高既有目標');
+  assert.equal(rejoin.state.requiredBuildings, 24, '遲到玩家加入不應提高既有目標');
+});
+
+
+test('房主可設定三種遊戲模式，開始後不能變更，且僅教師能查看事件答案',async()=>{
+ const created=await post('create',{name:'模式老師'});
+ const host=created.token;
+ const options=await post('action',{token:host,action:'settings',gameMode:'survival'});
+ assert.equal(options.state.gameMode,'survival');
+ assert.equal(options.state.eventsEnabled,true);
+ const joined=await post('join',{name:'測試學生',code:created.state.code});
+ await post('action',{token:host,action:'start'});
+ const event=await post('action',{token:host,action:'event',eventId:'meteor'});
+ assert.ok(event.state.hazards.length>0);
+ assert.equal(event.state.event.answer,undefined);
+ const denied=await post('action',{token:joined.token,action:'revealAnswer',scope:'event'});
+ assert.equal(denied.status,403);
+ const answer=await post('action',{token:host,action:'revealAnswer',scope:'event'});
+ assert.equal(answer.status,200);
+ assert.equal(answer.feedback.answer,125.6);
+ const modeLocked=await post('action',{token:host,action:'settings',gameMode:'growth'});
+ assert.equal(modeLocked.state.gameMode,'survival');
+ const skipped=await post('action',{token:host,action:'skipEvent'});
+ assert.equal(skipped.state.hazards.length,0);
+ assert.equal(skipped.state.resources.stability,58,'略過保留已造成的衝擊');
 });

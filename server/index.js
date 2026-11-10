@@ -137,6 +137,21 @@ async function api(req, res, pathname, searchParams) {
     const room = session.room;
     const action = String(body.action ?? '');
     let feedback = null;
+    if (action === 'revealAnswer') {
+      requireHost(session);
+      let task;
+      if (body.scope === 'event') {
+        if (!room.event) throw new HttpError('目前沒有事件題目');
+        const { EVENTS } = await import('./game.js');
+        task = EVENTS[room.event.id];
+      } else {
+        const player = room.players.find(p => p.id === body.playerId);
+        if (!player?.task || (body.taskId && body.taskId !== player.task.id)) throw new HttpError('題目已更新，請重新查看');
+        task = player.task;
+      }
+      // 只回傳給發出請求的教師，不儲存到共用狀態、日誌或 SSE。
+      return json(res, 200, { ok:true, feedback:{ answer:task.answer, formula:task.formula, unit:task.unit, steps:task.steps, taskId:task.id ?? null } });
+    }
     if (action === 'leave') {
       requireStudent(session);
       const idx = room.players.findIndex(p => p.token === body.token);
@@ -167,6 +182,10 @@ async function api(req, res, pathname, searchParams) {
       requireHost(session);
       if (['basic', 'standard', 'advanced'].includes(body.difficulty)) room.difficulty = body.difficulty;
       if (typeof body.eventsEnabled === 'boolean') room.eventsEnabled = body.eventsEnabled;
+      if (room.phase === 'lobby' && ['growth','balance','survival'].includes(body.gameMode)) {
+        room.gameMode = body.gameMode;
+        if (body.gameMode === 'survival') room.eventsEnabled = true;
+      }
       if (room.phase === 'lobby' && [15, 25, 40].includes(Number(body.durationMinutes))) {
         room.durationMinutes = Number(body.durationMinutes);
         room.remainingSeconds = room.durationMinutes * 60;
@@ -178,7 +197,9 @@ async function api(req, res, pathname, searchParams) {
     } else if (action === 'skipEvent') {
       requireHost(session);
       if (!room.event) throw new HttpError('目前沒有進行中的事件');
-      log(room, 'system', '老師已略過本次宇宙事件，不扣除資源。');
+      const hazardId = room.event.hazardId;
+      room.hazards = room.hazards.filter(h => h.key !== hazardId);
+      log(room, 'system', '老師已略過事件：移除當次異常，但已發生的初始資源衝擊仍保留。');
       room.event = null;
       room.eventCountdown = 110;
     } else if (action === 'finish') {
@@ -212,7 +233,9 @@ async function api(req, res, pathname, searchParams) {
       if (room.phase !== 'playing' || room.paused) throw new HttpError('請等候老師開始或恢復遊戲');
       if (!TASK_KINDS.includes(body.kind)) throw new HttpError('無效的建造類型');
       session.player.selectedKind = body.kind;
-      session.player.task = makeTask(body.kind, room.difficulty);
+      session.player.task = makeTask(body.kind, room.difficulty, Math.random, session.player.lastVariants?.[body.kind]);
+      session.player.lastVariants ??= {};
+      session.player.lastVariants[body.kind] = session.player.task.variant;
       session.player.hintUsed = false;
     } else if (action === 'hint') {
       requireStudent(session);
