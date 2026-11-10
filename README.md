@@ -47,6 +47,7 @@
 - **5｜錯誤診斷**：公式、單位、數值錯誤提供具體提醒，包含圓環面積、直徑／半徑及反求半徑。檔案：`server/game.js`。
 - **6｜更豐富星球動畫**：新增待機漂浮、地表移動、星光、海面光澤、雲層與生命特效，依生命指數改變外觀，支援 reduced-motion。檔案：`server/modes-v2.js`、`server/game.js`、`client/app.js`、`client/style.css`。
 - **7｜題型再擴充**：森林、星環、地形修復、能源每類 10 種，共 40 種，題型依難度開放，避免連續重複。數值採 π = 3.14 和整潔的半徑／直徑。檔案：`server/tasks-v3.js`、`server/game.js`。
+- **自動測試工作流程**：新增 `.github/workflows/test.yml`，每次推送 `main` 自動執行 `npm test`；此命令先檢查 `client/app.js`、`client/scratchpad.js` 語法，再進行 Node.js 單元與 API 整合測試。檔案：`.github/workflows/test.yml`、`package.json`。
 - **測試**：更新單元和整合測試，檢查四人平衡、四十題型、能源、事件輪替、老師解答權限與事件持續衝擊。測試結果以 GitHub CI 為準。
 - **部署**：GitHub `main` 已連接 Render 自動部署。部署結果需於推送後核對；上課前仍須實際測試多人連線及手寫計算紙。
 
