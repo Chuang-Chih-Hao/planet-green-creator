@@ -73,6 +73,7 @@ test('單人也能連續通過前兩關，第三關有劇情危機；事件答�
  assert.equal(no.status,403);
  const answer=await post('action',{token:h.token,action:'revealAnswer',scope:'event'});
  assert.equal(answer.status,200);
+ await new Promise(resolve=>setTimeout(resolve,480)); // 事件答題與上一項建造之間保留防連點間隔。
  const eventDone=await post('action',{token:p.token,action:'eventAnswer',formula:answer.feedback.formula,answer:answer.feedback.answer,unit:answer.feedback.unit});
  assert.equal(eventDone.feedback.correct,true);
  assert.equal(eventDone.state.stageChallengesResolved,1);

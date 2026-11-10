@@ -50,6 +50,7 @@
 - **5｜更多題庫、減少重複**：40 個建造題型各有更多變化數值（修復舊版五題型固定數字問題），四類工程各提供 8 組情境敘述，玩家保留最近 32 題指紋，重新抽題避免完全重複。檔案：`server/tasks-v3.js`、`server/game.js`、`server/index.js`。
 - **6｜結束後有數學複習與學習反思**：完成三關或時間結束，提供 3 道複習計算題與掌握程度、反思填答；提交後給完整詳解，教師可查看並以 CSV 匯出。檔案：`server/review.js`、`server/game.js`、`server/index.js`、`client/app.js`、`client/style.css`。
 - **測試修正**：第一輪 CI 為 17/18 通過，剩餘一項是整合測試在短於 450 毫秒內連續作答，觸發既有的防連點設定；已為測試加入 480 毫秒作答間隔，並將重新驗證。影響：`tests/integration.test.js`。
+- **測試修正追加**：同一段闖關整合測試從建造切換至宇宙事件時，也需保留 450 毫秒防連點間隔；已對事件作答模擬加入 480 毫秒等待，確保測試以真實可行的互動節奏執行。檔案：`tests/integration.test.js`。
 - **測試與部署**：已更新 `tests/game.test.js`、`tests/integration.test.js`；GitHub Actions 與 Render 的實際驗證結果將以提交後狀態更新。
 
 ### V1.2.0 — 2026-11-11
