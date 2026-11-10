@@ -48,7 +48,7 @@
 - **3｜觀念題與是非題**：每種工程加入 1 種觀念選擇題、1 種是非題；四類工程合計 40 種計算題型＋8 種觀念／是非題型。觀念題僅需選擇答案，不需輸入數字、單位或公式；答對仍可建造並取得星能，答錯提供概念提示。涉及 `server/tasks-v3.js`、`server/game.js`、`client/app.js`、`client/style.css`。
 - **4｜教師查看學生回顧的對錯**：課後回顧預設只顯示分數，老師點選個別學生的「查看回顧答題詳情」才能顯示每題作答、對錯、標準答案與解析；可隱藏，學生無 API 權限，答案不會廣播至 SSE。涉及 `server/index.js`、`client/app.js`、`client/style.css`。
 - **5｜避免過大的計算項目**：統一調整題目使用的直徑、半徑、圈數及環形面積，使用小數至多一位的數值，保留半徑／直徑、周長／面積、圓環、反求半徑等教學概念。涉及 `server/tasks-v2.js`、`server/tasks-v3.js`、`server/event-tasks.js`、`server/review.js`。
-- **測試與部署**：擴充 `tests/game.test.js`、`tests/integration.test.js`，涵蓋題型、答案精度、觀念是非題、教師查詢權限及事件題數值；實際 GitHub Actions 和 Render 結果在提交後檢查。
+- **驗證結果（2026-11-11 台灣時間）**：GitHub Actions [V1.4 測試紀錄](https://github.com/Chuang-Chih-Hao/planet-green-creator/actions/runs/42872898792) 執行 `npm test`，**20 項通過、0 項失敗**，前端與 Node.js 模組語法檢查成功。Render 已將 `44b8aad` 部署為 `Live`，啟動 `planet-green-creator@1.4.0`，公開網址 https://planet-green-creator.onrender.com 。本筆 README 更新會再次觸發自動部署（遊戲執行碼不變）。手機瀏覽器的動畫體感仍應於課堂實機檢查。
 
 ### V1.3.0 — 2026-11-11
 
