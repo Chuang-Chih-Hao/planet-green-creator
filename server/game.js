@@ -193,25 +193,37 @@ export function buildResult(room, player, submitted) {
   if (room.result) throw new Error('本局已結束');
   const task = player.task;
   if (!task || task.id !== submitted.taskId) throw new Error('題目已更新，請重新作答');
-  const formula = safeStr(submitted.formula);
-  const unit = safeStr(submitted.unit);
+  const quiz = task.type === 'choice' || task.type === 'trueFalse';
   const raw = safeStr(submitted.answer);
-  const value = Number(raw);
   const now = Date.now();
   if (now - player.lastAnswerAt < 450) throw new Error('作答太頻繁，請稍後再試');
-  if (!raw || raw.length > 20 || !Number.isFinite(value)) throw new Error('請輸入有效數字');
-  if (!unit) return { correct:false, reason:'missingUnit', message:'請先選擇單位：長度使用 km，面積使用 km²。這不是計算錯誤，選好單位後再提交。', taskId:task.id };
-  player.lastAnswerAt = now;
-  const isFormula = formula === task.formula;
-  const isValue = Math.abs(value - task.answer) <= 0.015;
-  const isUnit = unit === task.unit;
-  player.answered++;
-  if (!isFormula || !isValue || !isUnit) {
-    const reason = !isFormula ? 'formula' : !isValue ? 'value' : 'unit';
-    player.mistakes[reason]++;
-    const hint = diagnoseMistake(task,reason,value);
-    log(room, 'wrong', `${player.name} 在「${task.title}」嘗試作答`, { player: player.name, kind: task.kind, reason });
-    return { correct: false, reason, message: hint, taskId: task.id };
+  if (quiz) {
+    if (!task.choices?.some(x => x.value === raw)) return {correct:false, reason:'missingChoice', message:'請先選擇一個選項，再送出答案。', taskId:task.id};
+    player.lastAnswerAt = now;
+    player.answered++;
+    if (raw !== String(task.answer)) {
+      player.mistakes.value++;
+      log(room, 'wrong', `${player.name} 在「${task.title}」觀念判斷尚未正確`, {player:player.name,kind:task.kind,reason:'concept'});
+      return {correct:false,reason:'concept',message:'觀念再檢查一下：'+task.hint,taskId:task.id};
+    }
+  } else {
+    const formula = safeStr(submitted.formula);
+    const unit = safeStr(submitted.unit);
+    const value = Number(raw);
+    if (!raw || raw.length > 20 || !Number.isFinite(value)) throw new Error('請輸入有效數字');
+    if (!unit) return {correct:false,reason:'missingUnit',message:'請先選擇單位：長度使用 km，面積使用 km²。這不是計算錯誤，選好單位後再提交。',taskId:task.id};
+    player.lastAnswerAt = now;
+    const isFormula = formula === task.formula;
+    const isValue = Math.abs(value - task.answer) <= .015;
+    const isUnit = unit === task.unit;
+    player.answered++;
+    if (!isFormula || !isValue || !isUnit) {
+      const reason = !isFormula ? 'formula' : !isValue ? 'value' : 'unit';
+      player.mistakes[reason]++;
+      const hint = diagnoseMistake(task,reason,value);
+      log(room, 'wrong', `${player.name} 在「${task.title}」嘗試作答`, {player:player.name,kind:task.kind,reason});
+      return {correct:false,reason,message:hint,taskId:task.id};
+    }
   }
   player.correct++;
   const earned = player.hintUsed ? 8 : 12;

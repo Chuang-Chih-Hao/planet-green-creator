@@ -151,6 +151,7 @@ async function action(name, extra = {}) {
   loading = true;
   try {
     const response = await post('action', { token: savedSession.token, action: name, ...extra });
+    if (name === 'revealReview') {teacherReveals.set('review:'+extra.playerId,response.feedback);render();return;}
     if (name === 'revealAnswer') {
       teacherReveals.set(extra.scope === 'event' ? `event:${state?.event?.startedAt}` : extra.taskId, response.feedback);
       render();
@@ -270,6 +271,12 @@ function feedbackHTML(fb, isEvent = false) {
   const cl = fb.correct ? 'success' : fb.reason==='missingUnit' ? 'info' : 'error';
   return `<div class="feedback ${cl}" role="status"><strong>${fb.correct ? '✨ 答對了！' : fb.reason==='missingUnit' ? '📏 還沒有選擇單位' : '🧠 再想一想'}</strong>${escapeHTML(fb.message || '')}${fb.correct && fb.steps ? `<ol>${fb.steps.map(x => `<li>${escapeHTML(x)}</li>`).join('')}</ol>` : ''}${fb.correct && fb.stars ? `<div style="margin-top:7px">獲得 ⭐ ${fb.stars} 星能點數${isEvent ? '（全隊共享事件獎勵）' : ''}</div>` : ''}</div>`;
 }
+function quizHTML(task,draft={}) {
+  const title=task.type==='trueFalse'?'① 判斷是非':'① 選出最適合的答案';
+  return '<div class="math-formula quiz-panel"><label>'+title+'</label><div class="quiz-choices">'
+    +(task.choices||[]).map(opt=>'<label class="quiz-choice"><input type="radio" name="answer" value="'+escapeHTML(opt.value)+'" '+(draft.answer===opt.value?'checked':'')+'/><span>'+escapeHTML(opt.label)+'</span></label>').join('')
+    +'</div><p class="footnote">這是觀念題，不需要輸入數字、選公式或單位。</p></div>';
+}
 function formulaHTML(name, current = '') {
   return `<div class="math-formula"><label>① 選擇正確公式</label><div class="option-group">${FORMULAS.map(([id, text]) => `<label class="formula-option"><input type="radio" name="formula" value="${id}" ${current === id ? 'checked' : ''}/>${escapeHTML(text)}</label>`).join('')}</div></div>`;
 }
@@ -285,7 +292,7 @@ function eventPanel(s) {
 }
 function teacherAnswerCard(key, params, s) {
   const detail = teacherReveals.get(key);
-  return `<div class="teacher-answer-tools"><button type="button" class="mini-btn" data-action="${detail ? 'hideAnswer' : 'revealAnswer'}" data-answer-key="${escapeHTML(key)}" ${params.scope ? 'data-scope="event"' : `data-player-id="${escapeHTML(params.playerId)}" data-task-id="${escapeHTML(params.taskId)}"`}>${detail ? '🙈 隱藏答案' : '🔒 顯示答案（教師限定）'}</button>${detail ? `<div class="teacher-answer"><strong>公式：</strong>${escapeHTML(FORMULAS.find(x=>x[0]===detail.formula)?.[1]||detail.formula)}<br/><strong>答案：</strong>${detail.answer} ${escapeHTML(detail.unit)}<ol>${(detail.steps||[]).map(x=>`<li>${escapeHTML(x)}</li>`).join('')}</ol></div>` : '<span class="safe-note">目前答案隱藏，適合投影。</span>'}</div>`;
+  return `<div class="teacher-answer-tools"><button type="button" class="mini-btn" data-action="${detail ? 'hideAnswer' : 'revealAnswer'}" data-answer-key="${escapeHTML(key)}" ${params.scope ? 'data-scope="event"' : `data-player-id="${escapeHTML(params.playerId)}" data-task-id="${escapeHTML(params.taskId)}"`}>${detail ? '🙈 隱藏答案' : '🔒 顯示答案（教師限定）'}</button>${detail ? `<div class="teacher-answer">${detail.type&&detail.type!=='number'?`<strong>正確選項：</strong>${escapeHTML(detail.answerLabel||detail.answer)}`:`<strong>公式：</strong>${escapeHTML(FORMULAS.find(x=>x[0]===detail.formula)?.[1]||detail.formula)}<br/><strong>答案：</strong>${escapeHTML(detail.answer)} ${escapeHTML(detail.unit)}`}<ol>${(detail.steps||[]).map(x=>`<li>${escapeHTML(x)}</li>`).join('')}</ol></div>` : '<span class="safe-note">目前答案隱藏，適合投影。</span>'}</div>`;
 }
 function teacherLiveTasks(s) {
   return `<section class="card host-card"><div class="section-head"><h2>🧑‍🏫 學生即時題目</h2><span class="tag blue">即時同步</span></div><p class="footnote">每位學生目前正在作答的題目都會顯示；解答預設不提供，老師需要時再按鈕揭露。投影前請先隱藏答案。</p><div class="live-task-list">${s.players.map(p => `<article class="live-task"><div class="live-task-head"><strong>${escapeHTML(p.name)}</strong><span class="tag">${KINDS[p.task?.kind]?.emoji||'🚀'} ${escapeHTML(p.task?.title||'待命')}</span></div><p>${escapeHTML(p.task?.question||'尚未分派題目')}</p>${p.task ? teacherAnswerCard(p.task.id,{playerId:p.id,taskId:p.task.id},s) : ''}</article>`).join('') || '<p class="empty-state">尚無學生加入</p>'}</div></section>`;
@@ -300,10 +307,23 @@ function reviewPanel(s) {
   }
   return summary+`<section class="card review-card"><div class="section-head"><h2>📝 課後數學回顧</h2><span class="tag blue">3 道複習題</span></div><p class="footnote">回答三題並回想本次最困難的部分；提交後可以看到每題的解法。這份回饋會傳給老師。</p><form id="review-form">${rev.questions.map((q,i)=>`<div class="review-question"><label for="review-${q.id}"><strong>第 ${i+1} 題</strong> ${escapeHTML(q.question)}</label><div class="review-answer"><input id="review-${q.id}" class="text-input" inputmode="decimal" name="review-${q.id}" placeholder="填寫計算結果" value="${escapeHTML(reviewDraft['review-'+q.id]||'')}" required autocomplete="off"/><span>${escapeHTML(q.unit)}</span></div></div>`).join('')}<div class="field"><label for="review-confidence">今天對圓周長與圓面積的掌握程度</label><select id="review-confidence" class="select-input" name="confidence"><option value="understand" ${reviewDraft.confidence==='understand'?'selected':''}>我大致會了</option><option value="partial" ${!reviewDraft.confidence||reviewDraft.confidence==='partial'?'selected':''}>我還有部分不確定</option><option value="review" ${reviewDraft.confidence==='review'?'selected':''}>我需要再練習</option></select></div><div class="field"><label for="review-reflection">今天最難的題目是什麼？你是怎麼想的？</label><textarea id="review-reflection" name="reflection" class="text-input review-textarea" maxlength="300" rows="3" placeholder="例如：我常忘記面積要用半徑乘半徑...">${escapeHTML(reviewDraft.reflection||'')}</textarea></div><button class="btn full" type="submit">📩 提交並查看詳解</button></form></section>`;
 }
+function reviewDetailHTML(p) {
+  const key='review:'+p.id;
+  const detail=teacherReveals.get(key);
+  const button='<button class="mini-btn" type="button" data-action="'+(detail?'hideReview':'revealReview')+'" data-player-id="'+escapeHTML(p.id)+'">'+(detail?'🙈 隱藏回顧答案':'🔎 查看回顧答題詳情')+'</button>';
+  if(!detail)return '<div class="review-reveal">'+button+'</div>';
+  return '<div class="review-reveal">'+button
+    +(detail.results||[]).map((q,i)=>'<div class="review-teacher-question '+(q.correct?'correct':'incorrect')+'"><strong>第 '+(i+1)+' 題：'+(q.correct?'✅ 答對':'❌ 答錯')+'</strong><p>'+escapeHTML(q.question)+'</p><p>學生作答：'+escapeHTML(q.submitted||'未作答')+'；正確答案：'+escapeHTML(q.answer)+' '+escapeHTML(q.unit)+'</p><small>'+escapeHTML(q.explanation)+'</small></div>').join('')
+    +'</div>';
+}
 function teacherReviewPanel(s) {
   if(s.phase!=='finished')return '';
   const finished=s.players.filter(p=>p.reviewSubmitted).length;
-  return `<section class="card host-card"><div class="section-head"><h2>📝 課後回顧與學生回饋</h2><span class="tag blue">${finished}/${s.players.length} 已提交</span></div><p class="footnote">學生提交三道複習題後，教師可查看成績與文字反思。此區顯示題數與回饋，不自動公開每一題答案。</p><div class="review-teacher-list">${s.players.map(p=>`<article class="review-teacher-row"><strong>${escapeHTML(p.name)}</strong><span>${p.reviewSubmitted?`回顧答對 ${p.reviewScore}/3`:'尚未提交'}</span>${p.reviewSubmitted?`<p>掌握程度：${p.reviewConfidence==='understand'?'大致會了':p.reviewConfidence==='review'?'需要再練習':'部分不確定'}</p><p>反思：${escapeHTML(p.reviewReflection||'未填寫')}</p>`:''}</article>`).join('')}</div></section>`;
+  return '<section class="card host-card"><div class="section-head"><h2>📝 課後回顧與學生回饋</h2><span class="tag blue">'+finished+'/'+s.players.length+' 已提交</span></div>'
+    +'<p class="footnote">每位學生的正確與錯誤題目預設隱藏，老師按「查看回顧答題詳情」才顯示，適合分享畫面。</p><div class="review-teacher-list">'
+    +s.players.map(p=>'<article class="review-teacher-row"><strong>'+escapeHTML(p.name)+'</strong><span>'+(p.reviewSubmitted?'回顧答對 '+p.reviewScore+'/3':'尚未提交')+'</span>'
+      +(p.reviewSubmitted?'<p>掌握程度：'+(p.reviewConfidence==='understand'?'大致會了':p.reviewConfidence==='review'?'需要再練習':'部分不確定')+'</p><p>反思：'+escapeHTML(p.reviewReflection||'未填寫')+'</p>'+reviewDetailHTML(p):'')
+      +'</article>').join('')+'</div></section>';
 }
 function studentPanel(s) {
   if (s.phase === 'lobby') return `<section class="card waiting"><div class="big">🚀</div><h2>準備就緒，等待房主</h2><p>你已成功加入 <strong>${escapeHTML(s.code)}</strong> 房間！<br/>老師開始後，可以選擇森林、星環、地形修復或能源工程。<br/>不同人數會採不同的完成目標。</p></section>`;
@@ -317,7 +337,7 @@ function studentPanel(s) {
     <section class="card task-card"><div class="section-head"><h2>📐 數學建造任務</h2><span class="tag blue">π = 3.14</span></div><div class="task-tabs">${Object.entries(KINDS).map(([k, inf]) => `<button class="task-tab ${t.kind === k ? 'active' : ''}" data-action="selectTask" data-kind="${k}" ${s.paused ? 'disabled' : ''}><span class="emoji">${inf.emoji}</span>${inf.name}</button>`).join('')}</div>
     <div class="question-box"><div class="question-title">${KINDS[t.kind]?.emoji} ${escapeHTML(t.title)}</div><p class="question-text">${escapeHTML(t.question)}</p><div class="question-context">${escapeHTML(t.context)}</div></div>
     <div class="math-caption">✦ 你需要同時選對公式、算對數字及單位，才會完成建造。</div>
-    <form id="task-answer-form" data-draft-key="task:${t.id}">${formulaHTML('task', draft.formula)}${answerFields(draft)}<div class="help-row"><span>難度：${s.difficulty === 'basic' ? '基礎' : s.difficulty === 'advanced' ? '挑戰' : '標準'}</span><div class="task-helpers"><button class="mini-btn" type="button" data-action="hint">💡 公式提示</button><button class="mini-btn" type="button" data-action="scratch" data-scratch="task">✏️ 計算紙</button></div></div>${hintText ? `<div class="feedback info"><strong>💡 建造提示</strong>${escapeHTML(hintText)}</div>` : ''}<div class="task-actions"><button class="btn full" type="submit" ${s.paused ? 'disabled' : ''}>✨ 確認建造</button></div></form>
+    <form id="task-answer-form" data-draft-key="task:${t.id}">${t.type==='choice'||t.type==='trueFalse'?quizHTML(t,draft):formulaHTML('task',draft.formula)+answerFields(draft)}<div class="help-row"><span>難度：${s.difficulty === 'basic' ? '基礎' : s.difficulty === 'advanced' ? '挑戰' : '標準'}</span><div class="task-helpers"><button class="mini-btn" type="button" data-action="hint">💡 公式提示</button><button class="mini-btn" type="button" data-action="scratch" data-scratch="task">✏️ 計算紙</button></div></div>${hintText ? `<div class="feedback info"><strong>💡 建造提示</strong>${escapeHTML(hintText)}</div>` : ''}<div class="task-actions"><button class="btn full" type="submit" ${s.paused ? 'disabled' : ''}>✨ 確認建造</button></div></form>
     ${feedbackHTML(feedback)}</section>`;
 }
 function teacherSettingsPanel(s) {
@@ -335,7 +355,7 @@ function hostPanel(s) {
 function renderGame(s) {
   return `<div class="container"><header class="site-header"><div class="brand"><span class="brand-icon">🌍</span><span><div class="brand-title">星球綠化造物主</div><div class="brand-sub">PLANET MAKER · MATH LAB</div></span></div><div class="header-right"><span class="small-pill" data-connection><span class="online-dot ${connectionLive ? '' : 'off'}"></span> ${connectionLive ? '連線正常' : '連線中'}</span><button class="ghost-btn" data-action="leave">↩ 離開房間</button></div></header>
     <div class="game-top"><div><div class="eyebrow">${s.role === 'host' ? 'MISSION COMMAND · 房主視角' : 'EXPLORER MODE · 學生視角'}</div><div class="room-title">${s.phase === 'finished' ? '星球任務成果' : '打造我們的綠色星球'}</div></div><div class="top-actions"><span class="small-pill">房間 <strong class="room-code">${escapeHTML(s.code)}</strong></span><button class="mini-btn" data-action="copy" aria-label="複製房間代碼">⧉ 複製</button><span class="small-pill">👥 ${s.players.length}/${s.maxPlayers} 學生</span><span class="tag ${s.paused ? 'amber' : s.phase === 'playing' ? '' : 'blue'}">${s.paused ? '已暫停' : s.phase === 'lobby' ? '等待開始' : s.phase === 'playing' ? '進行中' : '已結束'}</span></div></div>
-    <main class="game-layout"><aside class="sidebar">${resourcesPanel(s)}${goalsPanel(s)}${playersPanel(s)}${historyPanel(s)}</aside>${planetPanel(s)}<aside class="work-panel">${s.role === 'host' ? hostPanel(s) : studentPanel(s)}<div class="rule-card"><strong>📚 數學規則</strong><ul><li>統一採用圓周率 π = 3.14。</li><li>周長是長度（km），面積是平方單位（km²）。</li><li>每人都能完成四種工程，並可同時作答。</li><li>事件答對一人就能幫助全隊；提示不影響通關。</li></ul></div></aside></main><footer class="footer">星球綠化造物主 v1.3 · 小學六年級數學課堂合作遊戲 · 本版進度僅保存在運行中的伺服器記憶體</footer></div>`;
+    <main class="game-layout"><aside class="sidebar">${resourcesPanel(s)}${goalsPanel(s)}${playersPanel(s)}${historyPanel(s)}</aside>${planetPanel(s)}<aside class="work-panel">${s.role === 'host' ? hostPanel(s) : studentPanel(s)}<div class="rule-card"><strong>📚 數學規則</strong><ul><li>統一採用圓周率 π = 3.14。</li><li>周長是長度（km），面積是平方單位（km²）。</li><li>每人都能完成四種工程，並可同時作答。</li><li>事件答對一人就能幫助全隊；提示不影響通關。</li></ul></div></aside></main><footer class="footer">星球綠化造物主 v1.4 · 小學六年級數學課堂合作遊戲 · 本版進度僅保存在運行中的伺服器記憶體</footer></div>`;
 }
 function captureFocus() {
   const active = document.activeElement;
@@ -376,6 +396,11 @@ root.addEventListener('submit', async event => {
   if (form.id === 'auth-form') return auth(form.dataset.auth, form);
   if (form.id === 'review-form') { const answers={}; for(const q of state.ownReview?.questions||[]) answers[q.id]=form.querySelector(`[name="review-${q.id}"]`)?.value||'';return action('submitReview',{answers,reflection:form.querySelector('[name="reflection"]')?.value||'',confidence:form.querySelector('[name="confidence"]')?.value||'partial'}); }
   if (form.id === 'task-answer-form') {
+    if (state?.ownTask?.type==='choice'||state?.ownTask?.type==='trueFalse') {
+      const chosen=form.querySelector('[name=answer]:checked')?.value || '';
+      if(!chosen){feedback={correct:false,reason:'missingChoice',message:'請先選擇一個選項。'};render();return;}
+      return action('answer',{taskId:state.ownTask.id,answer:chosen});
+    }
     const formula = form.querySelector('[name=formula]:checked')?.value ?? '';
     const answer = form.querySelector('[name=answer]').value;
     const unit = form.querySelector('[name=unit]').value;
@@ -439,6 +464,8 @@ root.addEventListener('click', async event => {
   }
   if (name === 'export') return exportCSV(state);
    if (name === 'scratch') return scratchpad.open(button.dataset.scratch);
+  if (name === 'hideReview') {teacherReveals.delete('review:'+button.dataset.playerId);render();return;}
+  if (name === 'revealReview') return action('revealReview',{playerId:button.dataset.playerId});
   if (name === 'hideAnswer') { teacherReveals.delete(button.dataset.answerKey); render(); return; }
   if (name === 'revealAnswer') return action('revealAnswer', button.dataset.scope === 'event' ? {scope:'event'} : {playerId:button.dataset.playerId,taskId:button.dataset.taskId});
   if (name === 'reset' && !confirm('確定重設本局？原有建築和作答統計將會清空。')) return;

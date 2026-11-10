@@ -137,6 +137,17 @@ async function api(req, res, pathname, searchParams) {
     const room = session.room;
     const action = String(body.action ?? '');
     let feedback = null;
+    if (action === 'revealReview') {
+      requireHost(session);
+      if (room.phase !== 'finished') throw new HttpError('只有結束後才能查看回顧');
+      const player = room.players.find(p => p.id === body.playerId);
+      if (!player?.review) throw new HttpError('這位學生尚未提交回顧');
+      // 房主單獨取得每道題的作答、正確答案、對錯與解析；絕不進入學生 SSE。
+      return json(res, 200, {ok:true,feedback:{
+        playerId:player.id,name:player.name,correct:player.review.correct,total:player.review.total,
+        results:player.review.results,reflection:player.review.reflection,confidence:player.review.confidence
+      }});
+    }
     if (action === 'revealAnswer') {
       requireHost(session);
       let task;
@@ -149,7 +160,7 @@ async function api(req, res, pathname, searchParams) {
         task = player.task;
       }
       // 只回傳給發出請求的教師，不儲存到共用狀態、日誌或 SSE。
-      return json(res, 200, { ok:true, feedback:{ answer:task.answer, formula:task.formula, unit:task.unit, steps:task.steps, taskId:task.id ?? null } });
+      return json(res, 200, { ok:true, feedback:{ answer:task.answer, formula:task.formula, unit:task.unit, type:task.type || 'number', answerLabel:task.choices?.find(x=>x.value===String(task.answer))?.label || null, steps:task.steps, taskId:task.id ?? null } });
     }
     if (action === 'leave') {
       requireStudent(session);

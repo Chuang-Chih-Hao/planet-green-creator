@@ -2,9 +2,9 @@
 import { randomUUID } from 'node:crypto';
 const PI=3.14;
 const pick=(a,rng)=>a[Math.min(a.length-1,Math.max(0,Math.floor(rng()*a.length)))];
-const fmt=n=>String(Number(n.toFixed(2)));
+const fmt=n=>String(Number(n.toFixed(1)));
 const area=r=>PI*r*r;
-const mk=(variant,question,answer,formula,unit,steps,hint)=>({id:randomUUID(),variant,question,answer:Number(answer.toFixed(2)),formula,unit,steps,hint});
+const mk=(variant,question,answer,formula,unit,steps,hint)=>({id:randomUUID(),variant,question,answer:Number(answer.toFixed(1)),formula,unit,steps,hint});
 export const EVENT_VARIANTS={
   meteor:['ring','diameters','width','double','core'],
   flare:['orbitHeight','diameter','doubleLoop','reverse','shieldArea'],
@@ -14,9 +14,9 @@ export const EVENT_VARIANTS={
 export function makeEventTask(id,rng=Math.random,exclude=null) {
   const all=EVENT_VARIANTS[id]; if(!all) throw new Error('未知的宇宙事件');
   const variant=pick(all.filter(v=>v!==exclude).length?all.filter(v=>v!==exclude):all,rng);
-  const r=pick([5,10,15,20],rng);
+  const r=5;
   if(id==='meteor'){
-    const outer=r+10;
+    const outer=r+5;
     if(variant==='ring') {
       const answer=area(outer)-area(r);
       return mk(variant,'隕石坑外半徑 '+outer+' 公里、內半徑 '+r+' 公里，待修復圓環面積是多少平方公里？',answer,'ring','km²',['3.14 × ('+outer+'² − '+r+'²) = '+fmt(answer)],'大圓面積減小圓面積，注意兩個半徑要分別平方。');
@@ -27,11 +27,11 @@ export function makeEventTask(id,rng=Math.random,exclude=null) {
     }
     if(variant==='width'){
       const a=area(outer)-area(r);
-      return mk(variant,'隕石擊中核心半徑 '+r+' 公里的區域，外圍又裂開寬 10 公里的環帶。受損環帶面積是多少平方公里？',a,'ring','km²',['外半徑 = '+r+' + 10 = '+outer,'圓環面積 = '+fmt(a)],'環帶外半徑要將原本半徑加上寬度。');
+      return mk(variant,'隕石擊中核心半徑 '+r+' 公里的區域，外圍又裂開寬 5 公里的環帶。受損環帶面積是多少平方公里？',a,'ring','km²',['外半徑 = '+r+' + 5 = '+outer,'圓環面積 = '+fmt(a)],'環帶外半徑要將原本半徑加上寬度。');
     }
     if(variant==='double'){
-      const a=2*(area(outer)-area(r));
-      return mk(variant,'同時出現 2 個相同隕石坑，外半徑 '+outer+'、內半徑 '+r+' 公里。總修復面積是多少平方公里？',a,'ring','km²',['一個圓環面積 = '+fmt(a/2),'兩個 = '+fmt(a)],'先算一個圓環，再乘上 2 個坑洞。');
+      const a=2*area(r);
+      return mk(variant,'兩個相同的圓形隕石坑，半徑都是 '+r+' 公里，修復總面積是多少平方公里？',a,'area','km²',['單一坑面積＝'+fmt(area(r)),'兩個合計＝'+fmt(a)],'先求一個圓形面積，再乘上 2。');
     }
     return mk(variant,'隕石坑外半徑 '+outer+' 公里，受損圓環面積 '+fmt(area(outer)-area(r))+' 平方公里，安全核心半徑幾公里？',r,'ring','km',['內圓面積 = '+fmt(area(outer))+' − '+fmt(area(outer)-area(r))+' = '+fmt(area(r)),'反推內圓半徑 = '+r],'先扣除受損圓環面積，得到安全核心的圓面積。');
   }
@@ -82,6 +82,6 @@ export function makeEventTask(id,rng=Math.random,exclude=null) {
   if(variant==='loops'){
     return mk(variant,'外星探測船沿半徑 '+r+' 公里的軌道連飛 3 圈，總長多少公里？',6*PI*r,'circumference','km',['一圈 = '+fmt(2*PI*r),'三圈 = '+fmt(6*PI*r)],'先算一圈，再乘 3。');
   }
-  const outer=r+10,a=area(outer)-area(r);
+  const outer=r+5,a=area(outer)-area(r);
   return mk(variant,'外星基地需要半徑 '+outer+' 公里的圓形平台，中央半徑 '+r+' 公里不可施工。剩餘可建面積多少平方公里？',a,'ring','km²',['3.14 × ('+outer+'² − '+r+'²) = '+fmt(a)],'外圓面積扣掉中央保留的內圓。');
 }

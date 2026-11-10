@@ -43,7 +43,12 @@ test('漏選單位會提供專門提醒，不算答錯；教師可以選擇顯�
  const host=await post('create',{name:'單位測試教師'});
  const student=await post('join',{name:'小明',code:host.state.code});
  await post('action',{token:host.token,action:'start'});
- const t=(await state(student.token)).ownTask;
+ let t=(await state(student.token)).ownTask;
+ for(let i=0;i<15&&(t.type==='choice'||t.type==='trueFalse');i++){
+   await post('action',{token:student.token,action:'selectTask',kind:'forest'});
+   t=(await state(student.token)).ownTask;
+ }
+ assert.ok(t.type!=='choice'&&t.type!=='trueFalse','單位測試應使用計算題');
  assert.equal(t.answer,undefined);
  const hostInfo=(await state(host.token)).players[0];
  assert.equal(hostInfo.task.answer,undefined);
@@ -94,6 +99,15 @@ test('結束後可完成三道數學複習，教師收到成績和文字回饋�
  assert.ok(submit.state.ownReview.result.results[0].explanation);
  const teacher=await state(h.token);
  assert.equal(teacher.players[0].reviewSubmitted,true);
+ assert.equal(teacher.players[0].reviewScore,submit.state.ownReview.result.correct);
+ assert.equal(teacher.players[0].reviewResults,undefined,'每題詳細答案不應出現在共用狀態');
+ const denied=await post('action',{token:p.token,action:'revealReview',playerId:teacher.players[0].id});
+ assert.equal(denied.status,403,'學生不能查教師回顧答案 API');
+ const revealed=await post('action',{token:h.token,action:'revealReview',playerId:teacher.players[0].id});
+ assert.equal(revealed.status,200);
+ assert.equal(revealed.feedback.results.length,3);
+ assert.ok(revealed.feedback.results.every(q=>typeof q.correct==='boolean'&&typeof q.answer==='number'));
+ assert.ok(revealed.feedback.results.every(q=>q.explanation));
  assert.match(teacher.players[0].reviewReflection,/圓環面積/);
  const reset=await post('action',{token:h.token,action:'reset'});
  assert.equal(reset.state.stage,1);
@@ -116,4 +130,22 @@ test('SSE 房間狀態會即時同步學生加入',async()=>{
   }
   assert.match(textValue,/即時玩家/);
  }finally{ctrl.abort();}
+});
+
+test('事件與課後題目數值小、答案最多一位小數',async()=>{
+ const h=await post('create',{name:'簡單數值教師'}),p=await post('join',{name:'學習者',code:h.state.code});
+ await post('action',{token:h.token,action:'start'});
+ for(const eventId of ['meteor','flare','rain','alien']){
+   const triggered=await post('action',{token:h.token,action:'event',eventId});
+   const q=triggered.state.event;
+   const reveal=await post('action',{token:h.token,action:'revealAnswer',scope:'event'});
+   assert.equal(reveal.status,200);
+   assert.ok(reveal.feedback.answer<=314);
+   assert.ok(Math.abs(reveal.feedback.answer*10-Math.round(reveal.feedback.answer*10))<1e-7);
+   await post('action',{token:h.token,action:'skipEvent'});
+ }
+ await post('action',{token:h.token,action:'finish'});
+ const review=(await state(p.token)).ownReview;
+ assert.equal(review.questions.length,3);
+ assert.ok(review.questions.every(q=>!/\d+\.\d{2,}/.test(q.question)));
 });

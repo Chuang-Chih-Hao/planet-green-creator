@@ -143,3 +143,35 @@
 .review-teacher-row p{color:#adc6df;font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0 0}
 @media(max-width:435px){.task-tabs{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.task-tab{min-height:74px;padding:10px 5px}.review-card{padding:15px}}
 @media(prefers-reduced-motion:reduce){.planet-building,.planet-building .structure-base,.planet-building .structure-icon,.planet-building .structure-effect{animation:none!important}}
+
+
+/* V1.4: the inhabited planet, orbit paths, probes and moon visibly revolve */
+.planet-sphere{animation:planetSphereRotate 75s linear infinite;transform-origin:50% 50%;will-change:transform}
+.orbit-line{animation:orbitTrackOne 28s linear infinite;transform-origin:50% 50%;will-change:transform}
+.orbit-line.two{animation:orbitTrackTwo 36s linear infinite reverse}
+.orbit-dot{left:50%;top:50%;animation:orbitingProbeOne 15s linear infinite;will-change:transform}
+.orbit-dot.second{left:50%;top:50%;animation:orbitingProbeTwo 22s linear infinite reverse}
+.planet-moon{left:50%;top:50%;right:auto;margin-left:-13px;margin-top:-13px;animation:moonRevolve 24s linear infinite;will-change:transform;box-shadow:0 0 17px #b8c5ec99}
+.planet-moon::after{content:"";position:absolute;inset:3px;border-radius:50%;background:radial-gradient(circle at 26% 26%,#ffffff65,transparent 40%),conic-gradient(from 10deg,transparent,#1e305670,transparent,#f3f8ff48,transparent);animation:moonTurn 7s linear infinite}
+@keyframes planetSphereRotate{to{transform:rotate(360deg)}}
+@keyframes orbitTrackOne{from{transform:rotate(-25deg) scaleY(.48)}to{transform:rotate(335deg) scaleY(.48)}}
+@keyframes orbitTrackTwo{from{transform:rotate(26deg) scaleY(.43)}to{transform:rotate(386deg) scaleY(.43)}}
+@keyframes orbitingProbeOne{from{transform:rotate(0deg) translateX(205px) scaleY(.55)}to{transform:rotate(360deg) translateX(205px) scaleY(.55)}}
+@keyframes orbitingProbeTwo{from{transform:rotate(0deg) translateX(235px) scaleY(.55)}to{transform:rotate(360deg) translateX(235px) scaleY(.55)}}
+@keyframes moonRevolve{from{transform:rotate(0deg) translateX(235px) rotate(0deg)}to{transform:rotate(360deg) translateX(235px) rotate(-360deg)}}
+@keyframes moonTurn{to{transform:rotate(360deg)}}
+/* Conceptual multiple-choice and true/false questions share the normal task reward */
+.quiz-panel{margin:18px 0}
+.quiz-choices{display:grid;grid-template-columns:1fr;gap:9px}
+.quiz-choice{display:flex;align-items:center;gap:12px;padding:12px 14px;background:#132c43;border:1px solid #3e637c;border-radius:11px;color:#d8ecf9;font-weight:700;cursor:pointer;transition:background .18s,border-color .18s}
+.quiz-choice:has(input:checked){background:#194941;border-color:#67dbac;box-shadow:inset 0 0 0 1px #4ce1ac38}
+.quiz-choice input{accent-color:#56e2af;min-width:17px;min-height:17px}
+.quiz-choice:hover{background:#204b4b}
+.review-reveal{clear:both;margin-top:11px;border-top:1px solid #395675;padding-top:10px}
+.review-teacher-question{margin:9px 0;padding:12px;border-radius:10px;background:#162d46;border:1px solid #416a86;font-size:12px;line-height:1.7}
+.review-teacher-question.correct{background:#173d36;border-color:#52bf9788}
+.review-teacher-question.incorrect{background:#4a2e31;border-color:#b3786a88}
+.review-teacher-question p{margin:6px 0;color:#e4eefa}
+.review-teacher-question small{display:block;color:#b4cbe5}
+/* Respect the user's system-level preference, including moving satellites and moon */
+@media(prefers-reduced-motion:reduce){.planet-sphere,.orbit-line,.orbit-line.two,.orbit-dot,.orbit-dot.second,.planet-moon,.planet-moon::after{animation:none!important}}

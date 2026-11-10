@@ -4,7 +4,7 @@ import {
   addPlayer,createRoom,makeTask,buildResult,goalForCount,triggerEvent,solveEvent,failEvent,
   publicState,tick,startRoom,FORMULAS,resetRoom,finishRoom,submitReview
 } from '../server/game.js';
-import { TASK_VARIANTS,TASK_SCENARIOS } from '../server/tasks-v3.js';
+import { TASK_VARIANTS,TASK_SCENARIOS,CONCEPT_VARIANTS } from '../server/tasks-v3.js';
 import { EVENT_VARIANTS } from '../server/event-tasks.js';
 import { modeGoalList } from '../server/modes-v2.js';
 
@@ -21,17 +21,45 @@ test('目標隨 1 到 5 人、時長調整，不需滿五人',()=>{
  assert.equal(goalForCount(1,40),8);assert.equal(goalForCount(4,40),32);
  assert.equal(goalForCount(5,40),40);assert.equal(goalForCount(4,25),20);assert.equal(goalForCount(4,15),12);
 });
-test('四大工程各有十題型與八種情境，數值與題幹可變動',()=>{
+test('四大工程維持十種計算題型，另加觀念題及是非題',()=>{
  for(const kind of ['forest','orbit','crater','power']){
    assert.equal(TASK_VARIANTS[kind].length,10);
+   assert.equal(CONCEPT_VARIANTS[kind].length,2);
    assert.ok(TASK_SCENARIOS[kind].length>=8);
    for(let i=0;i<10;i++){
-     const t=makeTask(kind,'advanced',()=> (i+.01)/10);
+     const t=makeTask(kind,'advanced',()=> (i+.01)/12);
      assert.equal(t.variant,TASK_VARIANTS[kind][i]);
-     assert.ok(Number.isFinite(t.answer)&&t.answer>=0);
+     assert.ok(Number.isFinite(t.answer)&&t.answer>0&&t.answer<=314);
+     assert.ok(Math.abs(t.answer*10-Math.round(t.answer*10))<1e-7,kind+' 的答案應最多一位小數');
      assert.match(t.question,/公里|平方公里/);
    }
+   const concept=makeTask(kind,'advanced',()=> 10.05/12);
+   const tf=makeTask(kind,'advanced',()=> 11.05/12);
+   assert.equal(concept.type,'choice');
+   assert.equal(tf.type,'trueFalse');
+   assert.equal(concept.choices.length,3);
+   assert.equal(tf.choices.length,2);
  }
+});
+test('觀念題和是非題不用公式或單位，答對仍可建造',()=>{
+ const {room,players:[p]}=roomWith();startRoom(room);
+ for(const slot of [10.05/12,11.05/12]){
+   p.task=makeTask('power','advanced',()=>slot);
+   assert.ok(['choice','trueFalse'].includes(p.task.type));
+   const before=p.answered;
+   const missing=buildResult(room,p,{taskId:p.task.id,answer:''});
+   assert.equal(missing.reason,'missingChoice');
+   assert.equal(p.answered,before);
+   const other=p.task.choices.find(x=>x.value!==p.task.answer);
+   const wrong=buildResult(room,p,{taskId:p.task.id,answer:other.value});
+   assert.equal(wrong.reason,'concept');
+   assert.match(wrong.message,/觀念/);
+   p.lastAnswerAt=0;
+   const correct=buildResult(room,p,{taskId:p.task.id,answer:p.task.answer});
+   assert.equal(correct.correct,true);
+   p.lastAnswerAt=0;
+ }
+ assert.equal(room.completed.power,2);
 });
 test('題目避開最近做過的完整題幹，同型題數值不固定',()=>{
  let seed=10391;
@@ -49,6 +77,7 @@ test('題目避開最近做過的完整題幹，同型題數值不固定',()=>{
 });
 test('空白單位僅提醒選單位，不列入答錯或提交次數',()=>{
  const {room,players:[p]}=roomWith();startRoom(room);
+ p.task=makeTask('forest','advanced',()=>0);
  const t=p.task,prev=p.answered;
  const res=buildResult(room,p,{taskId:t.id,formula:t.formula,answer:t.answer,unit:''});
  assert.equal(res.reason,'missingUnit');assert.match(res.message,/請先選擇單位/);
