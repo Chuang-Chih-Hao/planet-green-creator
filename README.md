@@ -48,8 +48,8 @@
 - **6｜更豐富星球動畫**：新增待機漂浮、地表移動、星光、海面光澤、雲層與生命特效，依生命指數改變外觀，支援 reduced-motion。檔案：`server/modes-v2.js`、`server/game.js`、`client/app.js`、`client/style.css`。
 - **7｜題型再擴充**：森林、星環、地形修復、能源每類 10 種，共 40 種，題型依難度開放，避免連續重複。數值採 π = 3.14 和整潔的半徑／直徑。檔案：`server/tasks-v3.js`、`server/game.js`。
 - **自動測試工作流程**：新增 `.github/workflows/test.yml`，每次推送 `main` 自動執行 `npm test`；此命令先檢查 `client/app.js`、`client/scratchpad.js` 語法，再進行 Node.js 單元與 API 整合測試。檔案：`.github/workflows/test.yml`、`package.json`。
-- **測試**：更新單元和整合測試，檢查四人平衡、四十題型、能源、事件輪替、老師解答權限與事件持續衝擊。測試結果以 GitHub CI 為準。
-- **部署**：GitHub `main` 已連接 Render 自動部署。部署結果需於推送後核對；上課前仍須實際測試多人連線及手寫計算紙。
+- **測試結果（2026-11-11 00:30 台灣時間）**：GitHub Actions 執行 `npm test`，前端兩支 JS 語法檢查成功，16 項 Node.js 單元／API 整合測試全數通過，0 項失敗。驗證紀錄：[Planet Green Tests #1](https://github.com/Chuang-Chih-Hao/planet-green-creator/actions/runs/42855105703)。
+- **部署結果（2026-11-11 00:30 台灣時間）**：Render 已成功部署 V1.2.0（提交 `9e62ce8`），狀態 `Live`，執行 `npm start` 並提供公開網址 https://planet-green-creator.onrender.com 。後續 README 補記提交會再次自動部署。上課前仍建議跨裝置實測手寫筆操作與多人連線。
 
 ### V1.1.0 — 2026-11-10
 
