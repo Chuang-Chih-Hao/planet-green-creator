@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   MAX_PLAYERS, TASK_KINDS, goalForCount, createRoom, addPlayer, newCode, publicState,
   makeTask, startRoom, buildResult, triggerEvent, solveEvent, log,
-  resetRoom, finishRoom, tick, checkWin
+  resetRoom, finishRoom, tick, checkWin, submitReview
 } from './game.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -181,10 +181,6 @@ async function api(req, res, pathname, searchParams) {
       requireHost(session);
       if (['basic', 'standard', 'advanced'].includes(body.difficulty)) room.difficulty = body.difficulty;
       if (typeof body.eventsEnabled === 'boolean') room.eventsEnabled = body.eventsEnabled;
-      if (room.phase === 'lobby' && ['growth','balance','survival'].includes(body.gameMode)) {
-        room.gameMode = body.gameMode;
-        if (body.gameMode === 'survival') room.eventsEnabled = true;
-      }
       if (room.phase === 'lobby' && [15, 25, 40].includes(Number(body.durationMinutes))) {
         room.durationMinutes = Number(body.durationMinutes);
         room.remainingSeconds = room.durationMinutes * 60;
@@ -201,6 +197,8 @@ async function api(req, res, pathname, searchParams) {
       log(room, 'system', '老師已略過事件：移除當次異常，但已發生的初始資源衝擊仍保留。');
       room.event = null;
       room.eventCountdown = 110;
+      // 教師明確略過劇情危機視為教學管理特例，避免自動事件關閉後卡關。
+      if(room.stage===3){room.stageChallengesResolved++;checkWin(room);}
     } else if (action === 'finish') {
       requireHost(session);
       finishRoom(room);
@@ -232,7 +230,7 @@ async function api(req, res, pathname, searchParams) {
       if (room.phase !== 'playing' || room.paused) throw new HttpError('請等候老師開始或恢復遊戲');
       if (!TASK_KINDS.includes(body.kind)) throw new HttpError('無效的建造類型');
       session.player.selectedKind = body.kind;
-      session.player.task = makeTask(body.kind, room.difficulty, Math.random, session.player.lastVariants?.[body.kind]);
+      session.player.task = makeTask(body.kind, room.difficulty, Math.random, session.player.lastVariants?.[body.kind], session.player.recentQuestions);
       session.player.lastVariants ??= {};
       session.player.lastVariants[body.kind] = session.player.task.variant;
       session.player.hintUsed = false;
@@ -249,6 +247,10 @@ async function api(req, res, pathname, searchParams) {
     } else if (action === 'eventAnswer') {
       requireStudent(session);
       try { feedback = solveEvent(room, session.player, body); }
+      catch (e) { throw new HttpError(e.message); }
+    } else if (action === 'submitReview') {
+      requireStudent(session);
+      try { feedback = submitReview(room, session.player, body); }
       catch (e) { throw new HttpError(e.message); }
     } else throw new HttpError('不支援的操作');
     broadcast(room);

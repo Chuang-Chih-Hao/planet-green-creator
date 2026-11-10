@@ -20,6 +20,14 @@ const mk = (kind,variant,title,question,answer,formula,unit,steps,hint,context,d
   ({id:randomUUID(), kind, variant, title, question, answer:round(answer), formula, unit, steps, hint, context, pi:PI, difficulty});
 const area = r => PI*r*r;
 const fmt = n => String(round(n));
+// 多版本情境與數值同時變化，不只是把同一句話的數字換掉。
+export const TASK_SCENARIOS = {
+ forest: ['🌿 氧氣研究站傳來新計畫：','🌳 造林機正在規劃植樹區：','🪴 生態團隊收到新任務：','🦋 生命保育區準備擴充：','🌱 植物培育員提出需求：','🏞️ 生態地圖標記了新區域：','🛰️ 軌道測繪發現一片綠地：','💚 星球氧氣中心提出方案：'],
+ orbit: ['🛰️ 衛星導航站發出指令：','📡 星環雷達正在測量：','🛡️ 防護總部準備升級：','🚀 巡航隊規劃新航線：','🌌 外太空巡邏站通知：','🔭 太空望遠鏡讀到新數據：','☄️ 防隕石系統要求測試：','🪐 星環工程隊提交設計：'],
+ crater: ['⛰️ 地質探測器回報：','🛠️ 修復機器人準備施工：','🌋 地面出現新的裂縫：','💧 防洪工程師提出計畫：','🧱 星球土木團隊正在測量：','☄️ 隕石坑監測中心發現：','🏗️ 工程車前往修補區：','📐 測繪站送來最新圖紙：'],
+ power: ['⚡ 能源控制中心通知：','☀️ 太陽能站規劃新場域：','🔋 能源儲存庫需要補充：','💡 電力工程師提交計畫：','🏭 發電基地準備擴建：','🧲 能量收集器開始運作：','🛰️ 衛星測得最佳發電區：','🌞 光能實驗室準備施工：']
+};
+const decorate=(task,rng)=>({...task,question:choose(TASK_SCENARIOS[task.kind],rng)+' '+task.question});
 
 export function makeVariedTask(kind='forest', difficulty='standard', rng=Math.random, excludeVariant=null) {
   const all=TASK_VARIANTS[kind];
@@ -29,12 +37,14 @@ export function makeVariedTask(kind='forest', difficulty='standard', rng=Math.ra
   const variant=choose(options.length?options:all.slice(0,max),rng);
   if (kind!=='power' && OLD[kind].includes(variant)) {
     const idx=OLD[kind].indexOf(variant);
-    return {...oldTask(kind,'advanced',()=> (idx+0.01)/OLD[kind].length),difficulty};
+    let first=true;
+    const forcedVariantThenRandom=()=>{if(first){first=false;return (idx+.01)/OLD[kind].length;}return rng();};
+    return decorate({...oldTask(kind,'advanced',forcedVariantThenRandom),difficulty},rng);
   }
   const r=choose([5,10,15,20],rng);
   const r2=choose([10,15,20,25],rng);
   const mkT=(title,q,a,f,u,steps,hint,context='完成這項工程可以改善星球環境。') =>
-    mk(kind,variant,title,q,a,f,u,steps,hint,context,difficulty);
+    decorate(mk(kind,variant,title,q,a,f,u,steps,hint,context,difficulty),rng);
   if(kind==='forest') {
     if(variant==='forestPairs') {
       const n=choose([2,3],rng),a=n*area(r);
