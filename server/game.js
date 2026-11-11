@@ -206,8 +206,9 @@ export function buildResult(room, player, submitted) {
     player.answered++;
     if (raw !== String(task.answer)) {
       player.mistakes.value++;
-      log(room, 'wrong', `${player.name} 在「${task.title}」觀念判斷尚未正確`, {player:player.name,kind:task.kind,reason:'concept'});
-      return {correct:false,reason:'concept',message:'觀念再檢查一下：'+task.hint,taskId:task.id};
+      const estimation=task.context?.startsWith('估算任務');
+      log(room, 'wrong', `${player.name} 在「${task.title}」${estimation?'估算選項':'觀念判斷'}尚未正確`, {player:player.name,kind:task.kind,reason:estimation?'estimate':'concept'});
+      return {correct:false,reason:estimation?'estimate':'concept',message:(estimation?'估算可以不用精算：':'觀念再檢查一下：')+task.hint,taskId:task.id};
     }
   } else {
     const formula = safeStr(submitted.formula);
@@ -449,7 +450,7 @@ export function publicState(room, token) {
     reviewSubmitted:!!p.review,reviewScore:isHost&&p.review? p.review.correct:undefined,
     reviewReflection:isHost&&p.review?p.review.reflection:undefined,reviewConfidence:isHost&&p.review?p.review.confidence:undefined,
     mistakes: isHost ? p.mistakes : undefined,
-    task: isHost && p.task ? { id: p.task.id, title: p.task.title, question: p.task.question, variant: p.task.variant, kind: p.task.kind } : undefined
+    task: isHost && p.task ? { id: p.task.id, title: p.task.title, question: p.task.question, variant: p.task.variant, kind: p.task.kind, choices: p.task.choices?.map(c=>({value:c.value,label:c.label})) } : undefined
   }));
   return {
     code: room.code, hostName: room.hostName, role: isHost ? 'host' : 'student',
@@ -471,6 +472,6 @@ export function publicState(room, token) {
     ownTask: me?.task ? { ...me.task, answer: undefined, steps: undefined } : null,
     ownHints: me?.hints ?? 0,
     ownReview:me && room.phase==='finished'?{questions:reviewPublicQuestions(me.reviewQuestions||[]),submitted:!!me.review,result:me.review||null}:null,
-    teacherNote: '數學規則：π = 3.14；長度 km，面積 km²；數值允許四捨五入的小誤差。'
+    teacherNote: '數學估算：π 約等於 3，從四個答案中選出最接近的值；觀念／是非題直接判斷。'
   };
 }

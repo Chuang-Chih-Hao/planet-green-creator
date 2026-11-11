@@ -280,10 +280,11 @@ function feedbackHTML(fb, isEvent = false) {
   return `<div class="feedback ${cl}" role="status"><strong>${fb.correct ? '✨ 答對了！' : fb.reason==='missingUnit' ? '📏 還沒有選擇單位' : '🧠 再想一想'}</strong>${escapeHTML(fb.message || '')}${fb.correct && fb.steps ? `<ol>${fb.steps.map(x => `<li>${escapeHTML(x)}</li>`).join('')}</ol>` : ''}${fb.correct && fb.stars ? `<div style="margin-top:7px">獲得 ⭐ ${fb.stars} 星能點數${isEvent ? '（全隊共享事件獎勵）' : ''}</div>` : ''}</div>`;
 }
 function quizHTML(task,draft={}) {
-  const title=task.type==='trueFalse'?'① 判斷是非':'① 選出最適合的答案';
+  const estimation=task.context?.startsWith('估算任務');
+  const title=task.type==='trueFalse'?'① 判斷是非':estimation?'① 用估算選出最接近的答案':'① 選出最適合的答案';
   return '<div class="math-formula quiz-panel"><label>'+title+'</label><div class="quiz-choices">'
     +(task.choices||[]).map(opt=>'<label class="quiz-choice"><input type="radio" name="answer" value="'+escapeHTML(opt.value)+'" '+(draft.answer===opt.value?'checked':'')+'/><span>'+escapeHTML(opt.label)+'</span></label>').join('')
-    +'</div><p class="footnote">這是觀念題，不需要輸入數字、選公式或單位。</p></div>';
+    +'</div><p class="footnote">'+(estimation?'先用 π ≈ 3 粗估，不必精算小數；正確值會最接近其中一個選項。':'觀念題不需要選公式或單位。')+'</p></div>';
 }
 function formulaHTML(name, current = '') {
   return `<div class="math-formula"><label>① 選擇正確公式</label><div class="option-group">${FORMULAS.map(([id, text]) => `<label class="formula-option"><input type="radio" name="formula" value="${id}" ${current === id ? 'checked' : ''}/>${escapeHTML(text)}</label>`).join('')}</div></div>`;
@@ -303,7 +304,7 @@ function teacherAnswerCard(key, params, s) {
   return `<div class="teacher-answer-tools"><button type="button" class="mini-btn" data-action="${detail ? 'hideAnswer' : 'revealAnswer'}" data-answer-key="${escapeHTML(key)}" ${params.scope ? 'data-scope="event"' : `data-player-id="${escapeHTML(params.playerId)}" data-task-id="${escapeHTML(params.taskId)}"`}>${detail ? '🙈 隱藏答案' : '🔒 顯示答案（教師限定）'}</button>${detail ? `<div class="teacher-answer">${detail.type&&detail.type!=='number'?`<strong>正確選項：</strong>${escapeHTML(detail.answerLabel||detail.answer)}`:`<strong>公式：</strong>${escapeHTML(FORMULAS.find(x=>x[0]===detail.formula)?.[1]||detail.formula)}<br/><strong>答案：</strong>${escapeHTML(detail.answer)} ${escapeHTML(detail.unit)}`}<ol>${(detail.steps||[]).map(x=>`<li>${escapeHTML(x)}</li>`).join('')}</ol></div>` : '<span class="safe-note">目前答案隱藏，適合投影。</span>'}</div>`;
 }
 function teacherLiveTasks(s) {
-  return `<section class="card host-card"><div class="section-head"><h2>🧑‍🏫 學生即時題目</h2><span class="tag blue">即時同步</span></div><p class="footnote">每位學生目前正在作答的題目都會顯示；解答預設不提供，老師需要時再按鈕揭露。投影前請先隱藏答案。</p><div class="live-task-list">${s.players.map(p => `<article class="live-task"><div class="live-task-head"><strong>${escapeHTML(p.name)}</strong><span class="tag">${KINDS[p.task?.kind]?.emoji||'🚀'} ${escapeHTML(p.task?.title||'待命')}</span></div><p>${escapeHTML(p.task?.question||'尚未分派題目')}</p>${p.task ? teacherAnswerCard(p.task.id,{playerId:p.id,taskId:p.task.id},s) : ''}</article>`).join('') || '<p class="empty-state">尚無學生加入</p>'}</div></section>`;
+  return `<section class="card host-card"><div class="section-head"><h2>🧑‍🏫 學生即時題目</h2><span class="tag blue">即時同步</span></div><p class="footnote">每位學生目前正在作答的題目都會顯示；解答預設不提供，老師需要時再按鈕揭露。投影前請先隱藏答案。</p><div class="live-task-list">${s.players.map(p => `<article class="live-task"><div class="live-task-head"><strong>${escapeHTML(p.name)}</strong><span class="tag">${KINDS[p.task?.kind]?.emoji||'🚀'} ${escapeHTML(p.task?.title||'待命')}</span></div><p>${escapeHTML(p.task?.question||'尚未分派題目')}</p>${p.task?.choices ? `<p class="footnote">選項：${p.task.choices.map(c=>escapeHTML(c.value+'. '+c.label)).join('　')}</p>` : ''}${p.task ? teacherAnswerCard(p.task.id,{playerId:p.id,taskId:p.task.id},s) : ''}</article>`).join('') || '<p class="empty-state">尚無學生加入</p>'}</div></section>`;
 }
 function reviewPanel(s) {
   const rev=s.ownReview;
@@ -364,9 +365,9 @@ function studentPanel(s) {
   const t = s.ownTask;
   if (!t) return `<div class="card waiting">請稍候，正在產生新任務...</div>`;
   const draft = drafts.get(`task:${t.id}`) || {};
-  const buildingMarkup=`<section class="card task-card"><div class="section-head"><h2>📐 數學建造任務</h2><span class="tag blue">π = 3.14</span></div><div class="task-tabs">${Object.entries(KINDS).map(([k, inf]) => `<button class="task-tab ${t.kind === k ? 'active' : ''}" data-action="selectTask" data-kind="${k}" ${s.paused ? 'disabled' : ''}><span class="emoji">${inf.emoji}</span>${inf.name}</button>`).join('')}</div>
+  const buildingMarkup=`<section class="card task-card"><div class="section-head"><h2>📐 數學建造任務</h2><span class="tag blue">π ≈ 3（估算）</span></div><div class="task-tabs">${Object.entries(KINDS).map(([k, inf]) => `<button class="task-tab ${t.kind === k ? 'active' : ''}" data-action="selectTask" data-kind="${k}" ${s.paused ? 'disabled' : ''}><span class="emoji">${inf.emoji}</span>${inf.name}</button>`).join('')}</div>
     <div class="question-box"><div class="question-title">${KINDS[t.kind]?.emoji} ${escapeHTML(t.title)}</div><p class="question-text">${escapeHTML(t.question)}</p><div class="question-context">${escapeHTML(t.context)}</div></div>
-    <div class="math-caption">✦ 你需要同時選對公式、算對數字及單位，才會完成建造。</div>
+    <div class="math-caption">✦ 計算題用 π ≈ 3 粗估，從四個答案選出最接近的一個；觀念題直接判斷。</div>
     <form id="task-answer-form" data-draft-key="task:${t.id}">${t.type==='choice'||t.type==='trueFalse'?quizHTML(t,draft):formulaHTML('task',draft.formula)+answerFields(draft)}<div class="help-row"><span>難度：${s.difficulty === 'basic' ? '基礎' : s.difficulty === 'advanced' ? '挑戰' : '標準'}</span><div class="task-helpers"><button class="mini-btn" type="button" data-action="hint">💡 公式提示</button><button class="mini-btn" type="button" data-action="scratch" data-scratch="task">✏️ 計算紙</button></div></div>${hintText ? `<div class="feedback info"><strong>💡 建造提示</strong>${escapeHTML(hintText)}</div>` : ''}<div class="task-actions"><button class="btn full" type="submit" ${s.paused ? 'disabled' : ''}>✨ 確認建造</button></div></form>
     ${feedbackHTML(feedback)}</section>`;
   return `<section class="card role-intro"><span class="icon">👨‍🚀</span><div><h2>第 ${s.stage} 關・數學建設</h2><p>先與隊友完成這段數學建設，系統就會自動開啟合作遊戲，不需要選活動。</p></div><span class="tag">階段建造</span></section>`

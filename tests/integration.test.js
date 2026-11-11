@@ -123,3 +123,62 @@ test('SSE 會同步房間加入與協作狀態，並保護個人資料',async()=
   assert.match(message,/連線學生/);
  } finally {controller.abort();}
 });
+
+test('兩位學生的估算題有四個選項，教師能看到選項但學生看不到答案',async()=>{
+ const h=await post('create',{name:'估算教師'});
+ const p=await post('join',{name:'估算玩家',code:h.state.code});
+ await post('action',{token:h.token,action:'start'});
+ let student=await state(p.token);
+ for(let tries=0;tries<25&&!student.ownTask?.context?.startsWith('估算任務');tries++){
+   await post('action',{token:p.token,action:'selectTask',kind:'forest'});
+   student=await state(p.token);
+ }
+ const t=student.ownTask;
+ assert.ok(t.context.startsWith('估算任務'),'本測試應使用數值估算題，而不是觀念題');
+ assert.equal(t.type,'choice');
+ assert.equal(t.choices.length,4);
+ assert.ok(t.choices.every(x=>/公里/.test(x.label)));
+ assert.equal(t.answer,undefined);
+ assert.equal(t.estimate,undefined);
+ assert.equal(t.steps,undefined);
+ const host=(await state(h.token)).players.find(x=>x.id===p.state.myId);
+ assert.equal(host.task.choices.length,4);
+ assert.equal(host.task.answer,undefined);
+ const reveal=await post('action',{token:h.token,action:'revealAnswer',playerId:host.id,taskId:t.id});
+ assert.equal(reveal.status,200);
+ assert.ok(['A','B','C','D'].includes(reveal.feedback.answer));
+ const chosen=await post('action',{token:p.token,action:'answer',taskId:t.id,answer:reveal.feedback.answer});
+ assert.equal(chosen.feedback.correct,true);
+});
+test('多人記憶接力為私人位置線索：每位僅兩格，沒有完整序列；必須交談協作',async()=>{
+ const h=await post('create',{name:'合作教師'});
+ const a=await post('join',{name:'小安',code:h.state.code});
+ const b=await post('join',{name:'小柏',code:h.state.code});
+ await post('action',{token:h.token,action:'settings',durationMinutes:15});
+ await post('action',{token:h.token,action:'start'});
+ const one=await doTask(h.token,a.token,'forest');
+ assert.equal(one.status,200);
+ const two=await doTask(h.token,a.token,'power');
+ assert.equal(two.status,200);
+ const g=two.state.teamGame;
+ assert.equal(g.kind,'memory');
+ assert.equal(g.sequence,null);
+ assert.equal(g.myClues.length,2);
+ assert.equal(g.turnName,'小安');
+ assert.equal(g.clueHolderName,'小柏');
+ const forA=await state(a.token),forB=await state(b.token),forHost=await state(h.token);
+ const ca=forA.teamGame.myClues,cb=forB.teamGame.myClues;
+ assert.equal(ca.length,2);assert.equal(cb.length,2);
+ assert.equal(new Set([...ca,...cb].map(c=>c.position)).size,4);
+ assert.equal(forHost.teamGame.myClues.length,0);
+ assert.equal(forHost.teamGame.sequence,null);
+ const clue=cb.find(c=>c.position===1);
+ assert.ok(clue,'第一格線索必須在另一個學生手上');
+ const denied=await post('action',{token:b.token,action:'teamMove',gameId:g.id,index:clue.pad});
+ assert.equal(denied.status,400,'只有被指定的操作員能按，另一人負責提供線索');
+ const hit=await post('action',{token:a.token,action:'teamMove',gameId:g.id,index:clue.pad});
+ assert.equal(hit.status,200);
+ assert.equal(hit.state.teamGame.step,1);
+ assert.equal(hit.state.teamGame.clueHolderName,'小安');
+ assert.equal(hit.state.teamGame.turnName,'小柏');
+});
