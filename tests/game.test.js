@@ -2,13 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
  addPlayer,createRoom,makeTask,buildResult,goalForCount,triggerEvent,solveEvent,failEvent,
- publicState,tick,startRoom,FORMULAS,resetRoom,finishRoom,submitReview,
+ publicState,tick,startRoom,FORMULAS,resetRoom,finishRoom,submitReview,EVENT_INTERVAL_SECONDS,MAX_GAME_MINUTES,
  checkWin,completeTeamGame,skipTeamGame
 } from '../server/game.js';
 import { TASK_VARIANTS,TASK_SCENARIOS,CONCEPT_VARIANTS } from '../server/tasks-v3.js';
 import { EVENT_VARIANTS } from '../server/event-tasks.js';
 import { mathStageGoals } from '../server/modes-v2.js';
-import { TEAM_GAMES,startTeamGame,playTeamGame,publicTeamGame,tickTeamGame } from '../server/team-games.js';
+import { TEAM_GAMES,startTeamGame,playTeamGame,publicTeamGame,tickTeamGame,roverMap } from '../server/team-games.js';
 
 const roomWith=(n=1)=>{
  const room=createRoom('TEST99');
@@ -56,25 +56,30 @@ function solvePipe(room,p){
  }
  assert.notEqual(room.teamGame,g,'管線必須有解法');
 }
-function findRoverPath(map){
- const queue=[0],parents=new Map([[0,null]]);
+function findRoverPath(map,cores,goal=35){
+ const key=(pos,mask)=>pos+':'+mask;
+ const need=(1<<cores.length)-1;
+ const queue=[{pos:0,mask:0}],parents=new Map([[key(0,0),null]]);
+ let finish=null;
  for(let i=0;i<queue.length;i++){
-  const a=queue[i];
-  if(a===24)break;
-  for(const [dir,diff] of [['N',-5],['S',5],['E',1],['W',-1]]){
-   const b=a+diff;
-   if(b<0||b>24||(dir==='E'&&a%5===4)||(dir==='W'&&a%5===0)||map[b]==='wall'||parents.has(b))continue;
-   parents.set(b,{prev:a,dir});queue.push(b);
+  const {pos,mask}=queue[i],current=key(pos,mask);
+  if(pos===goal&&mask===need){finish=current;break;}
+  for(const [dir,diff] of [['N',-6],['S',6],['E',1],['W',-1]]){
+   const next=pos+diff;
+   if(next<0||next>=36||(dir==='E'&&pos%6===5)||(dir==='W'&&pos%6===0)||map[next]==='wall')continue;
+   const found=cores.indexOf(next),newMask=mask|(found>=0?1<<found:0),k=key(next,newMask);
+   if(parents.has(k))continue;
+   parents.set(k,{prev:current,dir});queue.push({pos:next,mask:newMask});
   }
  }
- assert.ok(parents.has(24),'救援迷宮必須可到達目的地');
- const path=[];let cursor=24;
- while(cursor!==0){const p=parents.get(cursor);path.push(p.dir);cursor=p.prev;}
- return path.reverse();
+ assert.ok(finish,'迷宮必須可以拿到兩顆核心，最後抵達終點');
+ const moves=[];let cursor=finish;
+ while(parents.get(cursor)){const item=parents.get(cursor);moves.push(item.dir);cursor=item.prev;}
+ return moves.reverse();
 }
 function solveRover(room,p){
  const g=room.teamGame;assert.equal(g.kind,'rover');
- for(const dir of findRoverPath(g.map))move(room,p,{move:dir});
+ for(const dir of findRoverPath(g.map,g.cores,g.goal))move(room,p,{move:dir});
  assert.notEqual(room.teamGame,g);
 }
 function solveDefense(room,p){
@@ -90,8 +95,8 @@ function solveMosaic(room,p){
 }
 test('一至五人所需數學工程比舊版少，且六款合作遊戲分布三關',()=>{
  assert.equal(goalForCount(1,40),4);
- assert.equal(goalForCount(4,40),16);
- assert.equal(goalForCount(5,40),20);
+ assert.equal(goalForCount(4,30),12);
+ assert.equal(goalForCount(5,30),15);
  assert.equal(goalForCount(4,25),12);
  assert.equal(goalForCount(4,15),8);
  assert.deepEqual(TEAM_GAMES,{1:['memory','pulse'],2:['pipe','rover'],3:['defense','mosaic']});
@@ -99,7 +104,7 @@ test('一至五人所需數學工程比舊版少，且六款合作遊戲分布�
 test('四類工程 40 種計算題全改估算四選一，觀念題也有四選項',()=>{
  for(const kind of ['forest','orbit','crater','power']){
   assert.equal(TASK_VARIANTS[kind].length,10);
-  assert.equal(CONCEPT_VARIANTS[kind].length,2);
+  assert.equal(CONCEPT_VARIANTS[kind].length,3);
   assert.ok(TASK_SCENARIOS[kind].length>=8);
   for(let i=0;i<10;i++){
    const t=makeTask(kind,'advanced',()=>(i+.01)/12);
@@ -113,11 +118,15 @@ test('四類工程 40 種計算題全改估算四選一，觀念題也有四選�
    assert.equal(t.unit,null);
   }
   const concept=makeTask(kind,'advanced',()=>10.05/12);
-  const tf=makeTask(kind,'advanced',()=>11.05/12);
+  const tf=makeTask(kind,'advanced',()=>11.05/13);
   assert.equal(concept.type,'choice');
   assert.equal(concept.choices.length,4);
   assert.equal(tf.type,'trueFalse');
   assert.equal(tf.choices.length,2);
+  const unit=makeTask(kind,'advanced',()=>12.05/13);
+  assert.equal(unit.type,'choice');
+  assert.equal(unit.choices.length,4);
+  assert.match(unit.question,/單位|km/);
  }
  assert.ok(FORMULAS.some(f=>f.id==='reverseArea'&&f.text.includes('面積 ÷ π')));
 });
@@ -224,7 +233,9 @@ test('多人輪流操作：不是指定同學不可搶先作答，逾時可代�
  assert.equal(hit.completed,false);
  assert.equal(g.turnIndex,1);
  assert.throws(()=>playTeamGame(room,p1,{gameId:g.id,index:g.sequence[1]}),/輪到/);
- g.turnAt=Date.now()-13000;
+ g.turnAt=Date.now()-59000;
+ assert.throws(()=>playTeamGame(room,p1,{gameId:g.id,index:g.sequence[1]}),/輪到/);
+ g.turnAt=Date.now()-61000;
  assert.doesNotThrow(()=>playTeamGame(room,p1,{gameId:g.id,index:g.sequence[1]}));
 });
 test('第二關水管與迷宮兩種玩法不同，無需數學選項即可操作',()=>{
@@ -307,4 +318,60 @@ test('結束後課後複習與反思由老師查看，不洩漏其他學生資�
  resetRoom(room);
  assert.equal(room.stage,1);
  assert.equal(publicState(room,p1.token).progress,0);
+});
+
+
+test('充能光標在循環起點不能被誤判為綠區，綠區內容許短暫傳輸延遲',()=>{
+ const {room,players:[p]}=roomWith();
+ room.phase='playing';room.teamGamesCompleted[1]=1;startTeamGame(room);
+ const g=room.teamGame;assert.equal(g.kind,'pulse');
+ g.startedAt=Date.now()-Math.round(g.cycleMs*.97);
+ let result=playTeamGame(room,p,{gameId:g.id,move:'charge'});
+ assert.equal(result.completed,false);assert.equal(g.charges,0);
+ g.lastPressedAt=0;g.startedAt=Date.now()-Math.round(g.cycleMs*.38);
+ result=playTeamGame(room,p,{gameId:g.id,move:'charge'});
+ assert.equal(g.charges,1);
+});
+test('新的 6x6 救援迷宮必須收集兩顆能源核心再回基地，三種路線均有解',()=>{
+ for(const seed of [.05,.42,.90]){
+  const maze=roverMap(()=>seed);
+  assert.equal(maze.map.length,36);assert.equal(maze.cores.length,2);
+  const path=findRoverPath(maze.map,maze.cores);
+  assert.ok(path.length>=12,'不能單靠一直往右或向下通關');
+ }
+ const {room,players:[p]}=roomWith();
+ room.phase='playing';room.stage=2;room.teamGamesCompleted[2]=1;
+ startTeamGame(room);const g=room.teamGame;
+ assert.equal(g.kind,'rover');assert.equal(g.map.length,36);
+ // 避免直接造假：從起點移至終點也不能在尚未集齊兩顆核心時成功。
+ for(const dir of findRoverPath(g.map,g.cores))move(room,p,{move:dir});
+ assert.equal(room.teamGame,null);
+});
+test('30 分鐘為單局最大時長，15/25/30 分鐘目標各自生效',()=>{
+ assert.equal(MAX_GAME_MINUTES,30);
+ const r=createRoom('MAX30','教師',{durationMinutes:40});
+ assert.equal(r.durationMinutes,30);assert.equal(r.remainingSeconds,1800);
+ const {room,players:[p]}=roomWith();
+ room.durationMinutes=40;startRoom(room);
+ assert.equal(room.durationMinutes,30);assert.equal(room.remainingSeconds,1800);
+ assert.equal(goalForCount(4,30),12);
+});
+test('每 180 秒排程自動隨機宇宙事件，合作階段延後執行，不會打斷遊戲',()=>{
+ assert.equal(EVENT_INTERVAL_SECONDS,180);
+ const {room,players:[p]}=roomWith();
+ startRoom(room);assert.equal(room.eventsEnabled,true);
+ for(let i=0;i<179;i++)tick(room);
+ assert.equal(room.event,null);
+ tick(room);assert.ok(room.event);assert.equal(room.eventIndex,1);
+ const first=room.event.id;
+ failEvent(room);
+ // 第二次在團隊任務中到期，應排隊而非中斷正在進行的小遊戲。
+ room.hazards=[];room.eventCountdown=1;
+ startTeamGame(room);const active=room.teamGame;
+ tick(room);
+ assert.equal(room.event,null);assert.equal(room.teamGame,active);
+ assert.equal(room.eventCountdown,0);
+ room.teamGame=null;tick(room);
+ assert.ok(room.event);assert.equal(room.eventIndex,2);
+ assert.notEqual(room.event.id,first,'連續兩次事件應使用不同的隨機類型');
 });

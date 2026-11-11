@@ -41,15 +41,22 @@ function body(s,g){
    +'<p class="coop-meter">全隊已旋轉 '+g.moves+' 次 · 請觀察水流方向，再交給下一位。</p>';
  }
  if(g.kind==='rover'){
-  const tiles=g.map.map((v,i)=>'<div class="coop-maze-cell '+(v==='wall'?'wall':'open')+(i===g.position?' rover':'')+(i===g.goal?' destination':'')+'">'
-   +(i===g.position?'🚜':i===g.goal?'🏠':v==='wall'?'🪨':'')+'</div>').join('');
-  return '<div class="coop-instructions"><strong>🚜 救援車需要大家共同導航</strong><p>左上角出發，移動至右下角基地，碰到岩石要換路。每一次移動交給不同隊友操作。</p></div>'
-   +'<div class="coop-maze-grid">'+tiles+'</div><div class="coop-direction-pad">'
+  const size=g.mapSize||6;
+  const cells=g.map.map((v,i)=>{
+    const uncollected=g.cores.includes(i)&&!g.collected.includes(i);
+    return '<div class="coop-maze-cell '+(v==='wall'?'wall':'open')+
+     (i===g.position?' rover':'')+(i===g.goal?' destination':'')+
+     (uncollected?' core':'')+'">'+(i===g.position?'🚜':uncollected?'🔋':i===g.goal?'🏠':v==='wall'?'🪨':'')+'</div>';
+  }).join('');
+  return '<div class="coop-instructions"><strong>🚜 進階迷宮：先收集兩顆能源核心，再到基地</strong>'+
+   '<p>① 查看 6×6 地圖　② 大家討論如何繞路抵達 🔋　③ 全部收集後才可駛入 🏠。走錯路不會失敗，但可能需要回頭。</p></div>'
+   +'<div class="coop-defense-stats"><span>🔋 能源核心 '+g.collected.length+'/'+g.cores.length+'</span><span>🚜 移動 '+g.moves+' 步</span></div>'
+   +'<div class="coop-maze-grid" style="grid-template-columns:repeat('+size+',minmax(0,1fr))">'+cells+'</div><div class="coop-direction-pad">'
    +actionButton(s,g,'↑',{move:'N',cls:'coop-direction up'})
    +'<div>'+actionButton(s,g,'←',{move:'W',cls:'coop-direction'})
    +actionButton(s,g,'↓',{move:'S',cls:'coop-direction'})
    +actionButton(s,g,'→',{move:'E',cls:'coop-direction'})+'</div></div>'
-   +'<p class="coop-meter">已移動 '+g.moves+' 步 · 一起規劃救援車路線</p>';
+   +'<p class="coop-meter">隊友輪流操作方向，先把兩顆 🔋 帶回基地。方向不通時討論替代路線。</p>';
  }
  if(g.kind==='defense'){
   const labels=['左側','中央','右側'];
@@ -77,7 +84,7 @@ export function teamGameHTML(s){
  const collaborators=g.teammates.map(p=>'<span class="coop-member '+(p.id===g.turnPlayerId?'active':'')+' '+(p.acted?'acted':'')+'">'+(p.acted?'✓ ':'👨‍🚀 ')+h(p.name)+'</span>').join('');
  return '<section class="coop-card card" aria-label="全隊合作小遊戲"><div class="coop-top"><div><span class="coop-eyebrow">TEAM MISSION · 第 '+g.stage+' 關 · 小遊戲 '+g.index+'/'+g.total+'</span><h2>'+h(g.title)+'</h2><p>'+h(g.description)+'</p></div><span class="coop-status">🤝 全隊合作中</span></div>'
   +'<div class="coop-teammates">'+collaborators+'</div>'
-  +'<div class="coop-turn '+(g.myTurn?'your-turn':'')+'">'+control+(s.paused?' · ⏸️ 已暫停':'')+'<small>若輪到的同學離線或超過 12 秒未操作，其他隊友可以協助。</small></div>'
+  +'<div class="coop-turn '+(g.myTurn?'your-turn':'')+'">'+control+(s.paused?' · ⏸️ 已暫停':'')+'<small>若輪到的同學離線或超過 60 秒未操作，其他隊友可以協助。</small></div>'
   +'<div class="coop-playfield">'+body(s,g)+'</div><div class="coop-feedback" role="status">'+h(g.message||'請全隊互相提醒並依序完成操作。')+'</div>'
   +'</section>';
 }
@@ -85,7 +92,7 @@ export function updateTeamClocks(s){
  if(!s?.teamGame)return;
  const g=s.teamGame,time=s.paused&&s.pausedAt?s.pausedAt:Date.now();
  if(s.role==='student'&&!s.paused){
-   const canPlay=g.myTurn||time-g.turnAt>12000;
+   const canPlay=g.myTurn||time-g.turnAt>60000;
    document.querySelectorAll('[data-action="teamMove"]').forEach(node=>{node.disabled=!canPlay||node.dataset.teamStaticOff==='true';});
  }
  if(g.kind==='memory'){
@@ -100,4 +107,15 @@ export function updateTeamClocks(s){
   const remaining=Math.max(0,Math.ceil((g.deadlineAt-time)/1000));
   document.querySelectorAll('[data-defense-clock]').forEach(n=>n.textContent=remaining+' 秒');
  }
+}
+
+/* Keep cursor at the same modulo position as the server; 100%→0% teleports,
+   it must never animate backward across the green charging zone. */
+export function animatePulseCursor(s){
+ if(!s?.teamGame||s.teamGame.kind!=='pulse')return;
+ const g=s.teamGame;
+ const timestamp=s.paused&&s.pausedAt?s.pausedAt:Date.now();
+ const phase=((timestamp-g.startedAt)%g.cycleMs+g.cycleMs)%g.cycleMs/g.cycleMs;
+ const cursor=document.querySelector('[data-pulse-cursor]');
+ if(cursor)cursor.style.left=(phase*100)+'%';
 }

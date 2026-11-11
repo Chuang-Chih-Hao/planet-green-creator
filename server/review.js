@@ -5,9 +5,9 @@ const choose=a=>a[Math.floor(Math.random()*a.length)];
 export function makeReviewQuestions(){
   const r1=5,r2=choose([2.5,5,7.5]),outer=10,inner=5;
   return [
-    {id:'area',question:'森林半徑為 '+r1+' 公里，圓形森林面積是多少平方公里？',answer:Number((PI*r1*r1).toFixed(1)),unit:'km²',explanation:'圓面積 = 3.14 × '+r1+' × '+r1+' = '+fmt(PI*r1*r1)+' 平方公里。'},
-    {id:'circ',question:'衛星圓形軌道的直徑是 '+2*r2+' 公里，一圈的長度是多少公里？',answer:Number((2*PI*r2).toFixed(1)),unit:'km',explanation:'直徑 '+2*r2+' 公里，圓周長 = 3.14 × '+2*r2+' = '+fmt(2*PI*r2)+' 公里。'},
-    {id:'ring',question:'隕石坑外半徑 '+outer+' 公里，安全內圈半徑 '+inner+' 公里，受損圓環面積是多少平方公里？',answer:Number((PI*(outer*outer-inner*inner)).toFixed(1)),unit:'km²',explanation:'圓環面積 = 3.14 × ('+outer+'² − '+inner+'²) = '+fmt(PI*(outer*outer-inner*inner))+' 平方公里。'}
+    {id:'area',question:'森林半徑為 '+r1+' km，圓形森林面積是多少km²？',answer:Number((PI*r1*r1).toFixed(1)),unit:'km²',explanation:'圓面積 = 3.14 × '+r1+' × '+r1+' = '+fmt(PI*r1*r1)+' km²。'},
+    {id:'circ',question:'衛星圓形軌道的直徑是 '+2*r2+' km，一圈的長度是多少km？',answer:Number((2*PI*r2).toFixed(1)),unit:'km',explanation:'直徑 '+2*r2+' km，圓周長 = 3.14 × '+2*r2+' = '+fmt(2*PI*r2)+' km。'},
+    {id:'ring',question:'隕石坑外半徑 '+outer+' km，安全內圈半徑 '+inner+' km，受損圓環面積是多少km²？',answer:Number((PI*(outer*outer-inner*inner)).toFixed(1)),unit:'km²',explanation:'圓環面積 = 3.14 × ('+outer+'² - '+inner+'²) = '+fmt(PI*(outer*outer-inner*inner))+' km²。'}
   ];
 }
 export function reviewPublicQuestions(items=[]) {

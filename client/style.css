@@ -356,3 +356,16 @@
 .coop-no-clue{font-size:13px;color:#c3decf}
 @media(max-width:650px){.coop-memory-guide{grid-template-columns:1fr 1fr}.coop-memory-guide>div:last-child{grid-column:1/-1}}
 @media(max-width:480px){.quiz-choices{grid-template-columns:1fr}.coop-private-cards{grid-template-columns:1fr 1fr;gap:7px}.coop-private-clue{padding:12px 5px}.coop-private-clue strong{font-size:16px}}
+
+/* V1.8: Cursor wraps instantly at 100% instead of visually sliding backward through
+   the green zone. Position is continuously updated from the same phase as the server. */
+.coop-pulse-cursor{transition:none!important;will-change:left}
+.coop-maze-grid{max-width:470px;gap:4px}
+.coop-maze-grid .coop-maze-cell{min-width:0;font-size:20px}
+.coop-maze-grid .coop-maze-cell.core{background:#3c5b30;border:2px solid #e5d872;box-shadow:0 0 12px #f5e16b55}
+.goal-kind-guide{margin:13px 0;background:#112e42;border:1px solid #43778c;border-radius:12px;padding:11px}
+.goal-kind-guide p{font-size:11px;color:#bbd8e5;line-height:1.6;margin:0 0 9px}
+.goal-kind-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.goal-kind-grid span{background:#23465b;padding:9px 7px;border-radius:9px;font-size:12px;color:#e2fff3}
+.goal-kind-grid small{display:block;font-size:10px;color:#c5d9e3;margin-top:3px}
+@media(max-width:440px){.goal-kind-grid{grid-template-columns:1fr}}
