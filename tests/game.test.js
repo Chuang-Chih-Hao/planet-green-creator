@@ -24,7 +24,8 @@ function math(room,p,kind){
 function move(room,p,params={}){
  const g=room.teamGame;
  assert.ok(g,'合作小遊戲應存在');
- return completeTeamGame(room,p,{gameId:g.id,...params});
+ const operator=room.players.length>1?room.players[g.turnIndex%room.players.length]:p;
+ return completeTeamGame(room,operator,{gameId:g.id,...params});
 }
 function solveMemory(room,p){
  const g=room.teamGame;assert.equal(g.kind,'memory');
@@ -275,7 +276,18 @@ test('三關全部通過後自動進入回顧，保留老師資料隱藏',()=>{
  math(room,p,'orbit');
  assert.equal(room.teamGame.kind,'defense');
  solveDefense(room,p);solveMosaic(room,p);
- assert.equal(room.phase,'finished');assert.equal(room.result.win,true);
+ assert.equal(room.phase,'playing','六款合作遊戲完成但四項資源未滿，不可提前通關');
+ assert.equal(room.teamGamesCompleted[3],2);
+ assert.equal(room.teamGame,null,'需回到數學建造直到資源滿格');
+ assert.ok(publicState(room,p.token).progress<100);
+ assert.ok(publicState(room,p.token).goals.some(g=>g.id==='core-oxygen'));
+ for(let i=0;i<12&&room.phase==='playing';i++){
+   const gap=['oxygen','water','energy','stability'].map(k=>({key:k,need:100-room.resources[k]})).sort((a,b)=>b.need-a.need)[0];
+   math(room,p,{oxygen:'forest',water:'crater',energy:'power',stability:'orbit'}[gap.key]);
+ }
+ assert.equal(room.phase,'finished','充滿全部四條資源後應正常通關');
+ assert.equal(room.result.win,true);
+ assert.ok(['oxygen','water','energy','stability'].every(k=>room.resources[k]===100));
  assert.equal(publicState(room,p.token).progress,100);
  assert.equal(publicState(room,p.token).ownReview.questions.length,3);
  const teacher=publicState(room,room.hostToken);
@@ -374,4 +386,75 @@ test('每 180 秒排程自動隨機宇宙事件，合作階段延後執行，不
  room.teamGame=null;tick(room);
  assert.ok(room.event);assert.equal(room.eventIndex,2);
  assert.notEqual(room.event.id,first,'連續兩次事件應使用不同的隨機類型');
+});
+
+
+test('四種生命資源任何一條 99/100 時，生命核心絕不可啟動',()=>{
+ for(const missing of ['oxygen','water','energy','stability']){
+  const {room}=roomWith(4);
+  room.phase='playing';room.stage=3;room.requiredBuildings=12;
+  room.structures=Array.from({length:12},(_,i)=>({id:'b'+i,kind:['forest','crater','power','orbit'][i%4]}));
+  room.completed={forest:3,crater:3,power:3,orbit:3};
+  room.teamGamesCompleted={1:2,2:2,3:2};room.hazards=[];
+  room.resources={oxygen:100,water:100,energy:100,stability:100};
+  room.resources[missing]=99;
+  assert.equal(checkWin(room),false,'少 1 也不可提前通關：'+missing);
+  assert.equal(room.phase,'playing');
+  assert.equal(room.teamGame,null,'完成六款後不應重複啟動小遊戲');
+  assert.equal(room.result,null);
+  const goals=publicState(room,room.hostToken).goals;
+  assert.equal(goals.find(g=>g.id==='core-'+missing).met,false);
+  assert.equal(goals.filter(g=>g.id.startsWith('core-')&&g.met).length,3);
+  assert.ok(publicState(room,room.hostToken).progress<100);
+  room.resources[missing]=100;
+  assert.equal(checkWin(room),true);
+  assert.equal(room.result.win,true);
+ }
+});
+test('四名學生 30 分鐘配置：每人約三道數學工程＋六款合作遊戲後，四條資源都能達到 100',()=>{
+ const {room,players}=roomWith(4);
+ room.durationMinutes=30;room.eventsEnabled=false;
+ startRoom(room);
+ assert.equal(room.remainingSeconds,1800);
+ assert.equal(room.requiredBuildings,12);
+ const schedule=['forest','power','forest','power','crater','orbit','crater','crater','forest','power','orbit','orbit'];
+ for(let i=0;i<schedule.length;i++){
+   const student=players[i%players.length];
+   assert.equal(room.phase,'playing');
+   assert.equal(room.teamGame,null);
+   const result=math(room,student,schedule[i]);
+   assert.equal(result.correct,true);
+   if(i===3){
+     assert.equal(room.teamGame?.kind,'memory');
+     solveMemory(room,student);solvePulse(room,student);
+     assert.equal(room.stage,2);
+   }
+   if(i===7){
+     assert.equal(room.teamGame?.kind,'pipe');
+     solvePipe(room,student);solveRover(room,student);
+     assert.equal(room.stage,3);
+   }
+   if(i===11){
+     assert.equal(room.teamGame?.kind,'defense');
+     solveDefense(room,student);solveMosaic(room,student);
+   }
+ }
+ assert.equal(room.structures.length,12);
+ assert.ok(players.every(p=>p.correct===3),'四人應各完成三個數學工程');
+ assert.equal(room.teamGamesCompleted[1]+room.teamGamesCompleted[2]+room.teamGamesCompleted[3],6);
+ assert.deepEqual(Object.values(room.resources),[100,100,100,100]);
+ assert.equal(room.phase,'finished');
+ assert.equal(room.result.win,true);
+});
+test('30 分鐘結束仍未充滿資源時只能以未完成結束，並指出剩餘缺額',()=>{
+ const {room}=roomWith(4);
+ room.phase='playing';room.stage=3;
+ room.resources={oxygen:100,water:96,energy:99,stability:100};
+ room.remainingSeconds=1;room.eventsEnabled=false;
+ tick(room);
+ assert.equal(room.phase,'finished');
+ assert.equal(room.result.win,false);
+ assert.match(room.result.description,/水資源 96\/100/);
+ assert.match(room.result.description,/能源 99\/100/);
+ assert.doesNotMatch(room.result.title,/啟動成功/);
 });
