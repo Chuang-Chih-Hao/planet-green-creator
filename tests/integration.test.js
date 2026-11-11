@@ -25,7 +25,7 @@ async function doTask(host,student,kind){
  return post('action',{token:student,action:'answer',taskId:p.task.id,answer:fb.answer,formula:fb.formula,unit:fb.unit});
 }
 test('首頁、共享合作遊戲 UI、數學計算紙與健康檢查可讀取',async()=>{
- for(const path of ['/','/app.js','/team-ui.js','/scratchpad.js','/style.css','/api/health']){
+ for(const path of ['/','/app.js','/team-ui.js','/planet-renderer.js','/scratchpad.js','/style.css','/api/health']){
   const response=await fetch(base+path);
   assert.equal(response.status,200,path);
  }
@@ -207,4 +207,21 @@ test('接手等待更新為 60 秒、能源核心迷宮公開尺寸與收集進�
  const js=await (await fetch(base+'/team-ui.js')).text();
  assert.match(js,/60000/,'前端接手權限應等待 60 秒');
  assert.match(js,/6×6/,'迷宮說明應清楚列出 6×6 大小');
+});
+
+
+test('V1.9 星球渲染器為可由瀏覽器讀取的模組，地貌由資源更新且不用貼圖標',async()=>{
+ const [script,app,css]=await Promise.all([
+  fetch(base+'/planet-renderer.js').then(r=>r.text()),
+  fetch(base+'/app.js').then(r=>r.text()),
+  fetch(base+'/style.css').then(r=>r.text())
+ ]);
+ assert.match(script,/derivePlanetEcology/);
+ assert.match(script,/terrainAtlas/);
+ assert.match(script,/drawSpecial/);
+ assert.match(script,/globeProjection/);
+ assert.match(app,/planet-terrain-canvas/);
+ assert.match(app,/startPlanetRenderer/);
+ assert.doesNotMatch(app,/class="planet-building/);
+ assert.match(css,/\.planet-sphere\.planet-sphere-canvas/);
 });

@@ -1,5 +1,6 @@
 import { createScratchpad } from './scratchpad.js';
 import { teamGameHTML,updateTeamClocks,animatePulseCursor } from './team-ui.js';
+import { setPlanetEcologyState, startPlanetRenderer } from './planet-renderer.js';
 const root = document.getElementById('app');
 const toastRoot = document.getElementById('toast-root');
 const SESSION_KEY = 'planet-green-creator-session-v1';
@@ -70,6 +71,7 @@ function applyState(next) {
   if(state?.teamGame?.id!==next.teamGame?.id&&next.teamGame)toast('🎮 合作挑戰開始：'+next.teamGame.title);
   if(state?.phase==='finished'&&next.phase==='lobby') for(const key of Object.keys(reviewDraft))delete reviewDraft[key];
   state = next;
+  setPlanetEcologyState(next);
   document.title = `${next.code} · 星球綠化造物主`;
   render();
   scratchpad.refresh();
@@ -145,6 +147,7 @@ function logout(renderNow = true) {
   stream = null;
   savedSession = null;
   state = null;
+  setPlanetEcologyState(null);
   feedback = null;
   eventFeedback = null;
   hintText = '';
@@ -192,7 +195,7 @@ function renderWelcome() {
         <h1>用數學，<br />讓一顆星球<br /><em>重新長出生命。</em></h1>
         <p class="welcome-lead">先以數學幫星球建設，接著與隊友依序玩記憶接力、光能校準、合作接水管、救援車導航、隕石攔截及星圖拼圖。每一段完成後才會進入下一關。</p>
         <div class="hero-highlights"><span>👥 1–5 人自動平衡</span><span>📐 圓周長 × 圓面積</span><span>🎮 六種合作操作小遊戲</span><span>🎓 教師專屬控制台</span></div>
-        <div class="welcome-planet-wrap">${planetWorld([], 2)}</div>
+        <div class="welcome-planet-wrap">${planetWorld(null,true)}</div>
       </div>
       <div class="welcome-card card">
         <div class="eyebrow">MISSION CONTROL</div>
@@ -210,26 +213,17 @@ function renderWelcome() {
   </div>`;
 }
 
-function planetWorld(structures = [], stage = 0) {
-  const demo = stage >= 2 && structures.length === 0 ? [
-    {kind:'forest',x:33,y:28,owner:'預覽'}, {kind:'forest',x:63,y:48,owner:'預覽'},
-    {kind:'power',x:47,y:69,owner:'預覽'}, {kind:'orbit',x:76,y:45,owner:'預覽'}
-  ] : [];
-  const visible = structures.length ? structures.slice(-35) : demo;
-  const structuresArt = {forest:'🌳', orbit:'🛰️', crater:'🚜', power:'☀️'};
+function planetWorld(s=null,preview=false){
+  const stage=preview?3:s?.result?.win?3:s?.stage>=3?2:s?.stage===2?1:0;
+  // Surface terrain, waterways and energy replace floating construction emojis.
   return `<div class="planet-world planet-stage-${stage}">
     <div class="star-spark one"></div><div class="star-spark two"></div><div class="star-spark three"></div>
     <div class="orbit-line"></div><div class="orbit-line two"></div><div class="orbit-dot"></div><div class="orbit-dot second"></div>
     <div class="planet-glow"></div><div class="planet-atmosphere"></div>
-    <div class="planet-sphere">
-      <div class="planet-core-shading"></div>
-      <div class="planet-surface continent-a"></div><div class="planet-surface continent-b"></div><div class="planet-surface continent-c"></div>
-      <div class="planet-ocean-shine"></div><div class="planet-cloud cloud-a"></div><div class="planet-cloud cloud-b"></div>
-      <div class="planet-grid"></div>
-      ${visible.map((b,i)=>`<span class="planet-building ${b.kind}" title="${escapeHTML(b.owner)} 的${KINDS[b.kind]?.name||'建築'}" style="left:${Number(b.x)||45}%;top:${Number(b.y)||50}%;--structure-delay:${(i%6)*.33}s"><span class="structure-base"></span><span class="structure-icon">${structuresArt[b.kind]||'✨'}</span><span class="structure-effect"></span></span>`).join('')}
+    <div class="planet-sphere planet-sphere-canvas">
+      <canvas class="planet-terrain-canvas" width="280" height="280" data-planet-canvas="${preview?'preview':'live'}" role="img" aria-label="${preview?'繁盛後的卡通衛星視角星球預覽':'星球隨數學建造進度形成的森林、海洋、河流與能源地貌'}"></canvas>
+      <div class="planet-canvas-specular"></div>
     </div>
-    ${stage>=2?'<div class="planet-biosignal bio-one">✦</div><div class="planet-biosignal bio-two">✧</div>':''}
-    ${stage>=3?'<div class="planet-biosignal bio-three">🦋</div><div class="planet-biosignal bio-four">🌸</div>':''}
     <div class="planet-moon"></div>
   </div>`;
 }
@@ -265,8 +259,8 @@ function planetPanel(s) {
     <div class="planet-scene ${currentEvent ? `event-${currentEvent.style}` : ''} ${(s.hazards||[]).map(h=>`hazard-${h.id}`).join(' ')} ${s.phase === 'finished' && s.result?.win ? 'finish-scene' : ''}">
       <div class="scene-title"><h2>🌏 希望之星 · 第 ${s.stage} 關 ${escapeHTML(s.stageInfo?.title||'星球冒險')}</h2><p>PLANET ECOSYSTEM LIVE VIEW</p></div>
       <div class="scene-time">⏱ <span data-clock>${formatTime(s.remainingSeconds)}</span></div>
-      ${planetWorld(s.structures, stage)}
-      ${(s.hazards||[]).map((h,i)=>`<span class="hazard-visual hazard-visual-${escapeHTML(h.id)}" style="--hazard-index:${i}" title="${escapeHTML(h.notice)}">${h.emoji}</span>`).join('')}
+      ${planetWorld(s)}
+      ${s.hazards?.length?'<span class="planet-environment-warning" aria-hidden="true"></span>':''}
       ${currentEvent ? `<span class="scene-event-emoji">${currentEvent.emoji}</span><div class="event-scene-label">${currentEvent.emoji} ${escapeHTML(currentEvent.name)} · <span data-event-seconds>${currentEvent.secondsLeft}s</span></div>` : ''}
       ${s.paused ? '<div class="scene-paused"><div><div style="font-size:42px">⏸️</div><h3>任務暫停中</h3><p>等待房主恢復</p></div></div>' : ''}
       ${s.phase === 'finished' ? `<div class="finish-ribbon"><div class="big">${s.result?.win ? '🏆' : '📘'}</div><h2>${escapeHTML(s.result?.title || '本局結束')}</h2><p>${escapeHTML(s.result?.description || '')}</p></div>` : ''}
@@ -393,7 +387,7 @@ function hostPanel(s) {
 function renderGame(s) {
   return `<div class="container"><header class="site-header"><div class="brand"><span class="brand-icon">🌍</span><span><div class="brand-title">星球綠化造物主</div><div class="brand-sub">PLANET MAKER · MATH LAB</div></span></div><div class="header-right"><span class="small-pill" data-connection><span class="online-dot ${connectionLive ? '' : 'off'}"></span> ${connectionLive ? '連線正常' : '連線中'}</span><button class="ghost-btn" data-action="leave">↩ 離開房間</button></div></header>
     <div class="game-top"><div><div class="eyebrow">${s.role === 'host' ? 'MISSION COMMAND · 房主視角' : 'EXPLORER MODE · 學生視角'}</div><div class="room-title">${s.phase === 'finished' ? '星球任務成果' : '打造我們的綠色星球'}</div></div><div class="top-actions"><span class="small-pill">房間 <strong class="room-code">${escapeHTML(s.code)}</strong></span><button class="mini-btn" data-action="copy" aria-label="複製房間代碼">⧉ 複製</button><span class="small-pill">👥 ${s.players.length}/${s.maxPlayers} 學生</span><span class="tag ${s.paused ? 'amber' : s.phase === 'playing' ? '' : 'blue'}">${s.paused ? '已暫停' : s.phase === 'lobby' ? '等待開始' : s.phase === 'playing' ? '進行中' : '已結束'}</span></div></div>
-    ${s.teamGame?teamGameHTML(s):''}<main class="game-layout"><aside class="sidebar">${resourcesPanel(s)}${goalsPanel(s)}${playersPanel(s)}${historyPanel(s)}</aside>${planetPanel(s)}<aside class="work-panel">${s.role === 'host' ? hostPanel(s) : studentPanel(s)}<div class="rule-card"><strong>📚 數學規則</strong><ul><li>統一採用圓周率 π = 3.14。</li><li>周長是長度（km），面積是平方單位（km²）。</li><li>每人都能完成四種工程，並可同時作答。</li><li>事件答對一人就能幫助全隊；提示不影響通關。</li></ul></div></aside></main><footer class="footer">星球綠化造物主 v1.8 · 小學六年級數學課堂合作遊戲 · 本版進度僅保存在運行中的伺服器記憶體</footer></div>`;
+    ${s.teamGame?teamGameHTML(s):''}<main class="game-layout"><aside class="sidebar">${resourcesPanel(s)}${goalsPanel(s)}${playersPanel(s)}${historyPanel(s)}</aside>${planetPanel(s)}<aside class="work-panel">${s.role === 'host' ? hostPanel(s) : studentPanel(s)}<div class="rule-card"><strong>📚 數學規則</strong><ul><li>統一採用圓周率 π = 3.14。</li><li>周長是長度（km），面積是平方單位（km²）。</li><li>每人都能完成四種工程，並可同時作答。</li><li>事件答對一人就能幫助全隊；提示不影響通關。</li></ul></div></aside></main><footer class="footer">星球綠化造物主 v1.9 · 小學六年級數學課堂合作遊戲 · 本版進度僅保存在運行中的伺服器記憶體</footer></div>`;
 }
 function captureFocus() {
   const active = document.activeElement;
@@ -522,5 +516,6 @@ function animateTeamGame(){
  requestAnimationFrame(animateTeamGame);
 }
 requestAnimationFrame(animateTeamGame);
+startPlanetRenderer();
 render();
 resume();
