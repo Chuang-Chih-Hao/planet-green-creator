@@ -47,7 +47,7 @@
 - **修復原因**：使用者測試截圖發現初始星球上的隕石坑呈現硬邊、深色空心圓圈，而不是凹陷的撞擊地貌。根因為 V1.9 以固定半徑及 `Math.abs(距離 - 半徑)` 畫極薄深色線，中央僅以少量單色加深，沒有地形深度。
 - **隕石坑地貌重繪**：`client/planet-renderer.js` 新增 `craterProfile` 與 `craterReliefColor`，以多頻率角向擾動與略微扁橢圓形形成不同的破碎撞擊緣；使用寬而柔和的土塵拋射暈、完整陰影坑底、斜坡深淺變化、由左上方向入射的光照、較亮外緣與自然侵蝕紋理。完全移除單一像素的黑色幾何圓線。
 - **修復動態一致性**：維持原有森林／海洋／能源 Canvas 演化；改為由 `damage` 連續混合撞擊坑的全部色彩與地形陰影，因此完成修復後凹洞逐漸變淺並融入周邊地貌，不會突然消失或始終保留黑圈。
-- **測試**：`tests/planet.test.js` 增加撞擊坑的整片底部陰影、坑壁受光方向、邊緣不規則與修復後平滑淡化測試；`package.json` 及遊戲頁腳更新版本為 1.9.1。GitHub Actions 與 Render 實際測試／部署結果另行核對。
+- **正式測試與部署（2026-11-12 台灣時間）**：`tests/planet.test.js` 增加撞擊坑的整片底部陰影、坑壁受光方向、邊緣不規則與修復後平滑淡化測試；`package.json` 及遊戲頁腳更新版本為 1.9.1。GitHub Actions [V1.9.1 主分支測試](https://github.com/Chuang-Chih-Hao/planet-green-creator/actions/runs/43100177328) 執行 `npm test`，**34 項通過、0 項失敗**。Render 已確認正式程式提交 `aac8986` 部署為 **Live**，部署日誌顯示 `planet-green-creator@1.9.1` 正常啟動，公開網址 https://planet-green-creator.onrender.com 。本次 README 補記會再觸發一次文件版部署，遊戲程式不再更動；實際多裝置畫面呈現仍需課堂試玩驗證。
 
 ### V1.9.0 — 2026-11-12
 
