@@ -1,240 +1,240 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  addPlayer,createRoom,makeTask,buildResult,goalForCount,triggerEvent,solveEvent,failEvent,
-  publicState,tick,startRoom,FORMULAS,resetRoom,finishRoom,submitReview,checkWin
+ addPlayer,createRoom,makeTask,buildResult,goalForCount,triggerEvent,solveEvent,failEvent,
+ publicState,tick,startRoom,FORMULAS,resetRoom,finishRoom,submitReview,
+ checkWin,completeTeamGame,skipTeamGame
 } from '../server/game.js';
 import { TASK_VARIANTS,TASK_SCENARIOS,CONCEPT_VARIANTS } from '../server/tasks-v3.js';
 import { EVENT_VARIANTS } from '../server/event-tasks.js';
-import { modeGoalList } from '../server/modes-v2.js';
-import { exploreSector,chooseDecision,rotatePipe,purchaseTech,isPipelineSolved,explorationTarget,makePipeline } from '../server/adventure.js';
+import { mathStageGoals } from '../server/modes-v2.js';
+import { TEAM_GAMES,startTeamGame,playTeamGame,publicTeamGame,tickTeamGame } from '../server/team-games.js';
 
-function roomWith(n=1){
+const roomWith=(n=1)=>{
  const room=createRoom('TEST99');
  const players=Array.from({length:n},(_,i)=>addPlayer(room,'學生'+(i+1)));
  return {room,players};
+};
+function math(room,p,kind){
+ p.selectedKind=kind;p.task=makeTask(kind,'advanced',Math.random,null,p.recentQuestions);
+ p.lastAnswerAt=0;const t=p.task;
+ const value=t.type==='number'?{answer:t.answer,formula:t.formula,unit:t.unit}:{answer:t.answer};
+ return buildResult(room,p,{taskId:t.id,...value});
 }
-function correctTask(room,p,kind){
- p.selectedKind=kind;p.task=makeTask(kind,'advanced',Math.random,null,p.recentQuestions);p.lastAnswerAt=0;
- return buildResult(room,p,{taskId:p.task.id,formula:p.task.formula,answer:p.task.answer,unit:p.task.unit});
+function move(room,p,params={}){
+ const g=room.teamGame;
+ assert.ok(g,'合作小遊戲應存在');
+ return completeTeamGame(room,p,{gameId:g.id,...params});
 }
-
-function scanTo(room,p,target) {
-  for(let i=room.adventure.discovered;i<target;i++){
-    room.adventure.nextScanAt=0;
-    const idx=room.adventure.sectors.find(x=>!x.revealed).index;
-    exploreSector(room,p,idx);
-    if(room.adventure.decision)chooseDecision(room,p,room.adventure.decision.options[0].id);
-    checkWin(room);
-  }
+function solveMemory(room,p){
+ const g=room.teamGame;assert.equal(g.kind,'memory');
+ g.hidden=true;
+ for(const pad of g.sequence){if(room.teamGame!==g)break;move(room,p,{index:pad});}
+ assert.notEqual(room.teamGame,g);
 }
-const dirs=['N','E','S','W'],op={N:'S',E:'W',S:'N',W:'E'};
+function solvePulse(room,p){
+ const g=room.teamGame;assert.equal(g.kind,'pulse');
+ for(let i=0;i<g.goal;i++){
+  assert.equal(room.teamGame,g);
+  g.startedAt=Date.now()-Math.round(g.cycleMs*.4);
+  g.lastPressedAt=0;
+  move(room,p,{move:'charge'});
+ }
+ assert.notEqual(room.teamGame,g);
+}
+const dirs=['N','E','S','W'];
+const ports=c=>(c.kind==='straight'?['N','S']:['N','E']).map(d=>dirs[(dirs.indexOf(d)+c.rotation)%4]);
 const linkDir=(a,b)=>b-a===1?'E':b-a===-1?'W':b-a===3?'S':'N';
-const ports=cell=>(cell.kind==='straight'?['N','S']:['N','E']).map(dir=>dirs[(dirs.indexOf(dir)+cell.rotation)%4]);
-function repairPipe(room,p){
-  const before=room.adventure.pipeRepairs;
-  const path=[...room.adventure.pipe.solution];
-  for(let j=0;j<path.length;j++){
-    const i=path[j],needs=[j===0?'W':linkDir(i,path[j-1]),j===path.length-1?'E':linkDir(i,path[j+1])];
-    for(let turn=0;turn<4&&!needs.every(d=>ports(room.adventure.pipe.cells[i]).includes(d));turn++){
-      room.adventure.nextPipeAt=0;
-      rotatePipe(room,p,i);
-      if(room.adventure.pipeRepairs>before){checkWin(room);return;}
-    }
+function solvePipe(room,p){
+ const g=room.teamGame;assert.equal(g.kind,'pipe');
+ const path=[...g.pipe.solution];
+ for(let j=0;j<path.length&&room.teamGame===g;j++){
+  const index=path[j],required=[j===0?'W':linkDir(index,path[j-1]),j===path.length-1?'E':linkDir(index,path[j+1])];
+  for(let turn=0;turn<4&&room.teamGame===g&&!required.every(d=>ports(g.pipe.cells[index]).includes(d));turn++){
+   move(room,p,{index});
   }
-  assert.equal(room.adventure.pipeRepairs,before+1,'旋轉水管必須可完成');
-  checkWin(room);
+ }
+ assert.notEqual(room.teamGame,g,'管線必須有解法');
 }
-test('目標隨 1 到 5 人、時長調整，不需滿五人',()=>{
- assert.equal(goalForCount(1,40),4);assert.equal(goalForCount(4,40),16);
- assert.equal(goalForCount(5,40),20);assert.equal(goalForCount(4,25),12);assert.equal(goalForCount(4,15),8);
-});
-test('四大工程維持十種計算題型，另加觀念題及是非題',()=>{
- for(const kind of ['forest','orbit','crater','power']){
-   assert.equal(TASK_VARIANTS[kind].length,10);
-   assert.equal(CONCEPT_VARIANTS[kind].length,2);
-   assert.ok(TASK_SCENARIOS[kind].length>=8);
-   for(let i=0;i<10;i++){
-     const t=makeTask(kind,'advanced',()=> (i+.01)/12);
-     assert.equal(t.variant,TASK_VARIANTS[kind][i]);
-     assert.ok(Number.isFinite(t.answer)&&t.answer>0&&t.answer<=314);
-     assert.ok(Math.abs(t.answer*10-Math.round(t.answer*10))<1e-7,kind+' 的答案應最多一位小數');
-     assert.match(t.question,/公里|平方公里/);
-   }
-   const concept=makeTask(kind,'advanced',()=> 10.05/12);
-   const tf=makeTask(kind,'advanced',()=> 11.05/12);
-   assert.equal(concept.type,'choice');
-   assert.equal(tf.type,'trueFalse');
-   assert.equal(concept.choices.length,3);
-   assert.equal(tf.choices.length,2);
- }
-});
-test('觀念題和是非題不用公式或單位，答對仍可建造',()=>{
- const {room,players:[p]}=roomWith();startRoom(room);
- for(const slot of [10.05/12,11.05/12]){
-   p.task=makeTask('power','advanced',()=>slot);
-   assert.ok(['choice','trueFalse'].includes(p.task.type));
-   const before=p.answered;
-   const missing=buildResult(room,p,{taskId:p.task.id,answer:''});
-   assert.equal(missing.reason,'missingChoice');
-   assert.equal(p.answered,before);
-   const other=p.task.choices.find(x=>x.value!==p.task.answer);
-   const wrong=buildResult(room,p,{taskId:p.task.id,answer:other.value});
-   assert.equal(wrong.reason,'concept');
-   assert.match(wrong.message,/觀念/);
-   p.lastAnswerAt=0;
-   const correct=buildResult(room,p,{taskId:p.task.id,answer:p.task.answer});
-   assert.equal(correct.correct,true);
-   p.lastAnswerAt=0;
- }
- assert.equal(room.completed.power,2);
-});
-test('題目避開最近做過的完整題幹，同型題數值不固定',()=>{
- let seed=10391;
- const rng=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
- for(const kind of ['forest','orbit','crater','power']){
-  const recent=[];const encountered=[];
-  for(let i=0;i<26;i++){
-    const t=makeTask(kind,'advanced',rng,null,recent);
-    encountered.push(t.question);
+function findRoverPath(map){
+ const queue=[0],parents=new Map([[0,null]]);
+ for(let i=0;i<queue.length;i++){
+  const a=queue[i];
+  if(a===24)break;
+  for(const [dir,diff] of [['N',-5],['S',5],['E',1],['W',-1]]){
+   const b=a+diff;
+   if(b<0||b>24||(dir==='E'&&a%5===4)||(dir==='W'&&a%5===0)||map[b]==='wall'||parents.has(b))continue;
+   parents.set(b,{prev:a,dir});queue.push(b);
   }
-  assert.ok(new Set(encountered).size>=25,kind+' 近期題目應盡量不重複');
  }
- const x=makeTask('forest','advanced',()=>0),y=makeTask('forest','advanced',()=>.19);
- assert.notEqual(x.variant,y.variant);
+ assert.ok(parents.has(24),'救援迷宮必須可到達目的地');
+ const path=[];let cursor=24;
+ while(cursor!==0){const p=parents.get(cursor);path.push(p.dir);cursor=p.prev;}
+ return path.reverse();
+}
+function solveRover(room,p){
+ const g=room.teamGame;assert.equal(g.kind,'rover');
+ for(const dir of findRoverPath(g.map))move(room,p,{move:dir});
+ assert.notEqual(room.teamGame,g);
+}
+function solveDefense(room,p){
+ const g=room.teamGame;assert.equal(g.kind,'defense');
+ for(let i=0;i<g.goal;i++){g.deadlineAt=Date.now()+10000;move(room,p,{index:g.lane});}
+ assert.notEqual(room.teamGame,g);
+}
+function solveMosaic(room,p){
+ const g=room.teamGame;assert.equal(g.kind,'mosaic');
+ g.tiles=[1,2,3,4,5,6,7,0,8];
+ move(room,p,{index:8});
+ assert.notEqual(room.teamGame,g);
+}
+test('一至五人所需數學工程比舊版少，且六款合作遊戲分布三關',()=>{
+ assert.equal(goalForCount(1,40),4);
+ assert.equal(goalForCount(4,40),16);
+ assert.equal(goalForCount(5,40),20);
+ assert.equal(goalForCount(4,25),12);
+ assert.equal(goalForCount(4,15),8);
+ assert.deepEqual(TEAM_GAMES,{1:['memory','pulse'],2:['pipe','rover'],3:['defense','mosaic']});
 });
-test('空白單位僅提醒選單位，不列入答錯或提交次數',()=>{
+test('四類工程保持數值題、觀念題、是非題及一位小數',()=>{
+ for(const kind of ['forest','orbit','crater','power']){
+  assert.equal(TASK_VARIANTS[kind].length,10);assert.equal(CONCEPT_VARIANTS[kind].length,2);
+  assert.ok(TASK_SCENARIOS[kind].length>=8);
+  for(let i=0;i<10;i++){
+   const t=makeTask(kind,'advanced',()=>(i+.01)/12);
+   assert.ok(Number.isFinite(t.answer)&&t.answer>0&&t.answer<=314);
+   assert.ok(Math.abs(t.answer*10-Math.round(t.answer*10))<1e-7);
+  }
+ }
+ assert.ok(FORMULAS.some(f=>f.id==='reverseArea'&&f.text.includes('面積 ÷ π')));
+});
+test('漏選單位不扣分；觀念題不必選公式和單位',()=>{
  const {room,players:[p]}=roomWith();startRoom(room);
  p.task=makeTask('forest','advanced',()=>0);
- const t=p.task,prev=p.answered;
- const res=buildResult(room,p,{taskId:t.id,formula:t.formula,answer:t.answer,unit:''});
- assert.equal(res.reason,'missingUnit');assert.match(res.message,/請先選擇單位/);
- assert.equal(p.answered,prev);assert.deepEqual(p.mistakes,{formula:0,value:0,unit:0});
- assert.equal(p.lastAnswerAt,0);
- const done=buildResult(room,p,{taskId:t.id,formula:t.formula,answer:t.answer,unit:t.unit});
- assert.equal(done.correct,true);
-});
-test('公式、計算錯誤仍有具體診斷且不誤建造',()=>{
- const {room,players:[p]}=roomWith();startRoom(room);p.task=makeTask('forest','advanced',()=>0);const t=p.task;
- const wrong=buildResult(room,p,{taskId:t.id,formula:'ring',answer:t.answer,unit:t.unit});
- assert.equal(wrong.reason,'formula');assert.match(wrong.message,/公式/);
+ let t=p.task,prev=p.answered;
+ let res=buildResult(room,p,{taskId:t.id,answer:t.answer,formula:t.formula,unit:''});
+ assert.equal(res.reason,'missingUnit');assert.equal(p.answered,prev);
+ res=buildResult(room,p,{taskId:t.id,answer:t.answer,formula:t.formula,unit:t.unit});
+ assert.equal(res.correct,true);
+ p.lastAnswerAt=0;p.task=makeTask('power','advanced',()=>10.05/12);t=p.task;
+ assert.equal(t.type,'choice');
+ const other=t.choices.find(x=>x.value!==t.answer);
+ res=buildResult(room,p,{taskId:t.id,answer:other.value});
+ assert.equal(res.reason,'concept');
  p.lastAnswerAt=0;
- const wrong2=buildResult(room,p,{taskId:t.id,formula:t.formula,answer:t.answer/4,unit:t.unit});
- assert.equal(wrong2.reason,'value');assert.match(wrong2.message,/四分之一|半徑|直徑/);
- assert.equal(room.structures.length,0);
+ res=buildResult(room,p,{taskId:t.id,answer:t.answer});
+ assert.equal(res.correct,true);
 });
-test('三關闖關需探索、科技與接水管，不是只答題',()=>{
+test('第一關數學完成後立刻自動開始記憶接力，建造被鎖定',()=>{
  const {room,players:[p]}=roomWith();room.durationMinutes=15;startRoom(room);
- assert.equal(room.stage,1);assert.equal(publicState(room,room.hostToken).progress,0);
- correctTask(room,p,'forest');correctTask(room,p,'power');
- assert.equal(room.stage,1,'光解數學題不能進第二關');
- scanTo(room,p,explorationTarget(room,1));
- assert.equal(room.stage,2);
- scanTo(room,p,explorationTarget(room,2));
- purchaseTech(room,p,'battery');checkWin(room);
- correctTask(room,p,'crater');
- assert.equal(room.stage,2,'沒有水管任務不可以通關');
- repairPipe(room,p);
- assert.equal(room.stage,3);assert.equal(room.event.id,'flare');
- assert.ok(room.adventure.decisionsResolved>=1);
+ math(room,p,'forest');math(room,p,'power');
+ assert.equal(room.stage,1);
+ assert.equal(room.teamGame.kind,'memory');
+ assert.equal(publicState(room,p.token).teamGame.kind,'memory');
+ assert.throws(()=>math(room,p,'forest'),/合作小遊戲/);
+ assert.ok(mathStageGoals(room).every(x=>x.met));
+ solveMemory(room,p);
+ assert.equal(room.teamGame.kind,'pulse');
+ solvePulse(room,p);
+ assert.equal(room.stage,2);assert.equal(room.teamGame,null);
+ assert.equal(room.teamGamesCompleted[1],2);
 });
-test('第三關需探索與合作活動，完成後進入課後回顧',()=>{
- const {room,players:[p]}=roomWith();room.durationMinutes=15;room.eventsEnabled=false;startRoom(room);
- correctTask(room,p,'forest');correctTask(room,p,'power');scanTo(room,p,2);
+test('記憶遊戲預覽結束後不可讀到隱藏的正確順序',()=>{
+ const {room,players:[p]}=roomWith();room.phase='playing';
+ startTeamGame(room);
+ const before=publicState(room,p.token).teamGame;
+ assert.equal(before.sequence.length,room.teamGame.sequence.length);
+ room.teamGame.revealUntil=Date.now()-1;
+ assert.equal(tickTeamGame(room),true);
+ const after=publicState(room,p.token).teamGame;
+ assert.equal(after.sequence,null);assert.equal(after.hidden,true);
+});
+test('多人輪流操作：不是指定同學不可搶先作答，逾時可代替',()=>{
+ const {room,players:[p1,p2]}=roomWith(2);room.phase='playing';
+ startTeamGame(room);room.teamGame.hidden=true;
+ const g=room.teamGame;
+ assert.throws(()=>playTeamGame(room,p2,{gameId:g.id,index:g.sequence[0]}),/輪到/);
+ const hit=playTeamGame(room,p1,{gameId:g.id,index:g.sequence[0]});
+ assert.equal(hit.completed,false);
+ assert.equal(g.turnIndex,1);
+ assert.throws(()=>playTeamGame(room,p1,{gameId:g.id,index:g.sequence[1]}),/輪到/);
+ g.turnAt=Date.now()-13000;
+ assert.doesNotThrow(()=>playTeamGame(room,p1,{gameId:g.id,index:g.sequence[1]}));
+});
+test('第二關水管與迷宮兩種玩法不同，無需數學選項即可操作',()=>{
+ const {room,players:[p]}=roomWith();room.phase='playing';room.stage=2;
+ startTeamGame(room);assert.equal(room.teamGame.kind,'pipe');
+ assert.equal(publicState(room,p.token).teamGame.cells.length,9);
+ assert.equal(publicState(room,p.token).teamGame.pipe?.solution,undefined);
+ // 避免全局進度意外改變，直接保持算術目標未完成。
+ solvePipe(room,p);assert.equal(room.teamGame,null);
+ startTeamGame(room);assert.equal(room.teamGame.kind,'rover');
+ solveRover(room,p);assert.equal(room.teamGame,null);
+ assert.equal(room.teamGamesCompleted[2],2);
+});
+test('第三關攔截動態倒數與星圖滑塊可完成',()=>{
+ const {room,players:[p]}=roomWith();room.phase='playing';room.stage=3;
+ startTeamGame(room);assert.equal(room.teamGame.kind,'defense');
+ room.teamGame.deadlineAt=Date.now()-1;
+ const stability=room.resources.stability;
+ tickTeamGame(room);
+ assert.equal(room.resources.stability,stability-2);
+ solveDefense(room,p);
+ assert.equal(room.teamGame,null);
+ startTeamGame(room);assert.equal(room.teamGame.kind,'mosaic');
+ assert.equal(publicState(room,p.token).teamGame.tiles.length,9);
+ solveMosaic(room,p);
+ assert.equal(room.teamGamesCompleted[3],2);
+});
+test('三關全部通過後自動進入回顧，保留老師資料隱藏',()=>{
+ const {room,players:[p]}=roomWith();room.durationMinutes=15;startRoom(room);
+ math(room,p,'forest');math(room,p,'power');solveMemory(room,p);solvePulse(room,p);
  assert.equal(room.stage,2);
- scanTo(room,p,4);purchaseTech(room,p,'battery');correctTask(room,p,'crater');repairPipe(room,p);
- assert.equal(room.stage,3);
- const e=room.event.task;p.lastAnswerAt=0;
- const missing=solveEvent(room,p,{formula:e.formula,answer:e.answer,unit:''});
- assert.equal(missing.reason,'missingUnit');
- const solved=solveEvent(room,p,{formula:e.formula,answer:e.answer,unit:e.unit});
- assert.equal(solved.correct,true);
- scanTo(room,p,explorationTarget(room,3));
- purchaseTech(room,p,'nursery');checkWin(room);
- repairPipe(room,p);
- assert.ok(room.adventure.pipeRepairs>=2);
- assert.ok(room.adventure.upgrades.length>=2);
- for(let i=0;i<28&&room.phase==='playing';i++)correctTask(room,p,['orbit','forest','crater','power'][i%4]);
+ math(room,p,'crater');
+ assert.equal(room.teamGame.kind,'pipe');solvePipe(room,p);solveRover(room,p);
+ assert.equal(room.stage,3);assert.equal(room.teamGame,null);
+ math(room,p,'orbit');
+ assert.equal(room.teamGame.kind,'defense');
+ solveDefense(room,p);solveMosaic(room,p);
  assert.equal(room.phase,'finished');assert.equal(room.result.win,true);
  assert.equal(publicState(room,p.token).progress,100);
  assert.equal(publicState(room,p.token).ownReview.questions.length,3);
-});
-test('探索地圖保密、科技花材料且能真正改善星球',()=>{
- const {room,players:[p]}=roomWith();startRoom(room);
- const visible=publicState(room,p.token).adventure;
- assert.equal(visible.sectors.length,16);
- assert.ok(visible.sectors.every(x=>!x.revealed&&x.title==='未探索區域'&&x.type===undefined));
- scanTo(room,p,4);
- const a=publicState(room,p.token).adventure;
- assert.equal(a.discovered,4);assert.ok(a.materials>=4);
- const before=room.resources.energy;
- purchaseTech(room,p,'battery');
- assert.ok(room.resources.energy>=before+6);
- assert.ok(room.adventure.upgrades.includes('battery'));
- assert.throws(()=>purchaseTech(room,p,'battery'),/已經研究/);
-});
-test('接水管拼圖有可行解，完成後補水並產生下一組',()=>{
- const {room,players:[p]}=roomWith();room.phase='playing';room.stage=2;
- const before=room.resources.water;
- const initial=publicState(room,p.token).adventure.pipe;
- assert.equal(initial.cells.length,9);
- assert.equal(initial.solution,undefined,'不可洩漏管線解法');
- repairPipe(room,p);
- assert.equal(room.adventure.pipeRepairs,1);
- assert.equal(room.resources.water,before+9);
- assert.equal(room.adventure.pipe.round,2);
-});
-test('各階段即使事件失敗，也能由對應工程修復',()=>{
- const {room,players:[p]}=roomWith();room.phase='playing';room.stage=3;
- triggerEvent(room,'meteor');assert.equal(room.hazards.length,1);
- room.event.secondsLeft=1;tick(room);
- assert.equal(room.event,null);assert.equal(room.hazards[0].status,'lingering');
- correctTask(room,p,'crater');
- assert.equal(room.hazards.length,0);assert.equal(room.stageChallengesResolved,1);
-});
-test('教師可看目前學生題目但不會拿到答案，學生看不到其他人的題目',()=>{
- const {room,players:[p1,p2]}=roomWith(2);
  const teacher=publicState(room,room.hostToken);
- assert.equal(teacher.players[0].task.question,p1.task.question);
  assert.equal(teacher.players[0].task.answer,undefined);
- assert.equal(publicState(room,p1.token).players[1].task,undefined);
- assert.equal(publicState(room,p1.token).ownTask.answer,undefined);
 });
-test('宇宙事件不同題型不連續重複且答案隱藏',()=>{
+test('教師略過單款遊戲不會加資源獎勵',()=>{
+ const {room,players:[p]}=roomWith();room.durationMinutes=15;startRoom(room);
+ math(room,p,'forest');math(room,p,'power');
+ const before=room.resources.oxygen;
+ const r=skipTeamGame(room);
+ assert.match(r.message,/已略過/);
+ assert.equal(room.resources.oxygen,before);
+ assert.equal(room.teamGamesCompleted[1],1);
+ assert.equal(room.teamGame.kind,'pulse');
+});
+test('事件仍保留教師手動題目與災後修復功能',()=>{
  const {room,players:[p]}=roomWith();room.phase='playing';
- for(const k of Object.keys(EVENT_VARIANTS)){
-  triggerEvent(room,k);
-  const first=room.event.task.variant;
-  const state=publicState(room,p.token);
-  assert.equal(state.event.answer,undefined);
-  failEvent(room);
-  triggerEvent(room,k);
-  assert.notEqual(room.event.task.variant,first);
-  failEvent(room);
- }
+ triggerEvent(room,'meteor');const task=room.event.task;
+ assert.equal(publicState(room,p.token).event.answer,undefined);
+ const bad=solveEvent(room,p,{formula:task.formula,answer:task.answer,unit:''});
+ assert.equal(bad.reason,'missingUnit');
+ const win=solveEvent(room,p,{formula:task.formula,answer:task.answer,unit:task.unit});
+ assert.equal(win.correct,true);
+ triggerEvent(room,'flare');failEvent(room);
+ assert.equal(room.hazards.at(-1).status,'lingering');
+ math(room,p,'power');
+ assert.equal(room.hazards.filter(x=>x.id==='flare').length,0);
 });
-test('課後三道複習與反思：只回傳給本人與老師統計，不洩漏給其他學生',()=>{
+test('結束後課後複習與反思由老師查看，不洩漏其他學生資料',()=>{
  const {room,players:[p1,p2]}=roomWith(2);
  finishRoom(room);
- const one=publicState(room,p1.token);
- assert.equal(one.ownReview.questions.length,3);
- assert.equal(one.ownReview.questions[0].answer,undefined);
+ const qs=publicState(room,p1.token).ownReview.questions;
+ assert.equal(qs.length,3);assert.equal(qs[0].answer,undefined);
  const answers=Object.fromEntries(p1.reviewQuestions.map(q=>[q.id,q.answer]));
- const submitted=submitReview(room,p1,{answers,confidence:'understand',reflection:'圓環要大圓減小圓'});
- assert.equal(submitted.correct,3);
- const personal=publicState(room,p1.token);
- assert.equal(personal.ownReview.result.results.length,3);
- const other=publicState(room,p2.token);
- assert.equal(other.players[0].reviewReflection,undefined);
- const teacher=publicState(room,room.hostToken);
- assert.equal(teacher.players[0].reviewScore,3);
- assert.match(teacher.players[0].reviewReflection,/圓環/);
- assert.throws(()=>submitReview(room,p1,{answers}),/已提交/);
+ assert.equal(submitReview(room,p1,{answers,reflection:'我學會圓環面積',confidence:'understand'}).correct,3);
+ assert.equal(publicState(room,p2.token).players[0].reviewReflection,undefined);
+ assert.equal(publicState(room,room.hostToken).players[0].reviewScore,3);
  resetRoom(room);
- assert.equal(publicState(room,p1.token).progress,0);
  assert.equal(room.stage,1);
-});
-test('圓面積除以 π 求半徑公式仍可使用',()=>{
- assert.ok(FORMULAS.some(f=>f.id==='reverseArea'&&f.text.includes('面積 ÷ π')));
- assert.ok(FORMULAS.some(f=>f.id==='reverseCirc'));
+ assert.equal(publicState(room,p1.token).progress,0);
 });

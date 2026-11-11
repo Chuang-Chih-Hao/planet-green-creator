@@ -246,3 +246,92 @@
  .research-item{flex-wrap:wrap}.research-item button{margin-left:auto}
 }
 @media(prefers-reduced-motion:reduce){.sector-tile span{animation:none!important}}
+
+
+/* V1.6: large, automatically presented shared minigame stage (not an activity picker). */
+.coop-card{margin:14px 0 22px;padding:22px;border-radius:20px;border:2px solid #69d8b67a;background:radial-gradient(ellipse at 76% 6%,#19586a88,transparent 60%),linear-gradient(145deg,#0e263d,#122f3c);box-shadow:0 12px 40px #07162888,inset 0 0 40px #00ef9b0c}
+.coop-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.coop-top h2{font-size:23px;line-height:1.45;color:#eafff6;margin:7px 0}
+.coop-top p{color:#adcede;font-size:13px;line-height:1.7;margin:2px 0 0}
+.coop-eyebrow{font-size:11px;color:#81ecc8;font-weight:800;letter-spacing:.1em}
+.coop-status{white-space:nowrap;font-size:12px;font-weight:800;color:#063f3c;background:#98f4cb;padding:7px 13px;border-radius:999px}
+.coop-teammates{display:flex;gap:7px;flex-wrap:wrap;margin:15px 0 10px}
+.coop-member{border:1px solid #465f77;background:#20364c;color:#bdd3e4;border-radius:999px;font-size:11px;padding:5px 10px}
+.coop-member.acted{background:#164b3e;border-color:#5cbe98;color:#c9ffe5}
+.coop-member.active{border-color:#ffdd91;box-shadow:0 0 0 1px #f3d48f66;color:#ffe9b5}
+.coop-turn{border-radius:11px;padding:12px 16px;font-weight:800;color:#b4d2e8;background:#1d3d52;border:1px solid #476b85;margin-bottom:14px}
+.coop-turn.your-turn{background:#184e42;color:#c1ffe9;border-color:#67d9af;box-shadow:0 0 17px #43e3b826;animation:turnPulse 2.8s ease-in-out infinite}
+.coop-turn small{display:block;font-weight:500;color:#a9c4d2;font-size:11px;margin-top:3px}
+.coop-playfield{min-height:280px;max-width:920px;margin:0 auto}
+.coop-instructions{text-align:center;padding:12px 16px;margin:0 0 15px;background:#0e273ab0;border:1px solid #315775;border-radius:12px}
+.coop-instructions strong{color:#b6ffe7;font-size:15px}
+.coop-instructions p{color:#abc6d6;font-size:12px;line-height:1.8;margin:6px 0 0}
+.coop-feedback{text-align:center;background:#2044569c;color:#e5f9ff;border-radius:10px;padding:11px 15px;font-size:12px;line-height:1.6;margin-top:15px;min-height:40px}
+.coop-button,.coop-pad,.coop-direction,.coop-pulse-button{cursor:pointer;border:1px solid #77aac1;border-radius:14px;background:linear-gradient(145deg,#205572,#183950);color:#f2fcff;font-size:16px;font-weight:800;padding:12px;transition:transform .15s,border-color .15s,background .15s}
+.coop-button:hover:not(:disabled),.coop-pad:hover:not(:disabled),.coop-direction:hover:not(:disabled){transform:translateY(-3px);border-color:#95ffcb;background:#266e70}
+.coop-button:disabled,.coop-pad:disabled,.coop-direction:disabled,.coop-pulse-button:disabled{opacity:.55;cursor:not-allowed}
+.coop-meter{text-align:center;margin:12px auto;color:#d3e6ed;font-size:12px}
+.coop-memory-sequence{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:20px 0 13px}
+.coop-memory-sequence span{display:grid;place-items:center;width:45px;height:48px;border-radius:10px;background:#1e4360;border:1px solid #508ab7;font-size:21px;box-shadow:0 0 12px #77ddff20}
+.coop-memory-sequence span.passed{background:#16594b;border-color:#72edbd;color:#b2ffe4}
+.coop-pads{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;max-width:720px;margin:15px auto}
+.coop-pad{min-height:105px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-size:12px}
+.coop-pad span{font-size:33px;filter:drop-shadow(0 0 8px #7bffc799);animation:coopSymbolBob 2.5s ease-in-out infinite}
+.coop-pad.pad-1{background:linear-gradient(150deg,#78601a,#3d3120);border-color:#d5b84a}
+.coop-pad.pad-2{background:linear-gradient(150deg,#205478,#163a59);border-color:#77c6ed}
+.coop-pad.pad-3{background:linear-gradient(150deg,#524377,#293b63);border-color:#ad91df}
+.coop-charge-count{text-align:center;margin:23px auto}
+.coop-charge-count strong{font-size:35px;color:#f8ec91;text-shadow:0 0 25px #f6d45880}
+.coop-charge-count span{display:block;font-size:12px;color:#b8cbd4}
+.coop-pulse-track{position:relative;height:45px;margin:19px auto 8px;border-radius:22px;border:2px solid #50728a;background:linear-gradient(90deg,#203754,#193b56);overflow:hidden;max-width:790px}
+.coop-pulse-target{position:absolute;top:0;bottom:0;background:linear-gradient(90deg,#2ea67b,#5de79b,#2ba46c);box-shadow:0 0 26px #53ebb687;animation:coopTargetGlow 2s ease-in-out infinite}
+.coop-pulse-cursor{position:absolute;top:-5px;bottom:-5px;width:8px;margin-left:-4px;border-radius:8px;background:#fff8be;z-index:2;box-shadow:0 0 0 3px #fff2a544,0 0 17px #ffe488,0 0 40px #fff4ae;transition:left 1s linear}
+.coop-pulse-axis{display:flex;justify-content:space-between;gap:8px;max-width:790px;margin:0 auto 18px;color:#9eb5c9;font-size:11px}
+.coop-pulse-button{display:block;background:linear-gradient(115deg,#d19a2b,#bd6a2e);border:2px solid #ffdc83;color:#172b30;box-shadow:0 0 26px #e3b84936;margin:12px auto;width:min(100%,460px);padding:18px;font-size:17px}
+.coop-pulse-button:not(:disabled):hover{transform:scale(1.03);box-shadow:0 0 35px #ecd9688a}
+.coop-pipeline{max-width:470px;margin:15px auto}
+.coop-pipeline .pipe-grid{max-width:350px}
+.coop-maze-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;max-width:440px;margin:16px auto;background:#102d3e;padding:8px;border:1px solid #5d8793;border-radius:14px}
+.coop-maze-cell{aspect-ratio:1;border-radius:8px;display:grid;place-items:center;font-size:22px;border:1px solid #437789;background:#235a59}
+.coop-maze-cell.wall{background:#253a4b;border-color:#475469;font-size:24px;box-shadow:inset 0 0 12px #09151e}
+.coop-maze-cell.rover{background:#2a715f;border:2px solid #93edbb;box-shadow:0 0 18px #5af0a654;animation:roverBeacon 1.6s ease-in-out infinite}
+.coop-maze-cell.destination{background:#48628a;border-color:#9bccff}
+.coop-direction-pad{text-align:center;max-width:320px;margin:14px auto 6px}
+.coop-direction-pad>div{display:flex;justify-content:center;gap:10px;margin-top:8px}
+.coop-direction{height:50px;min-width:67px;font-size:23px;padding:6px 12px}
+.coop-defense-stats{display:flex;justify-content:space-around;gap:8px;flex-wrap:wrap;margin:12px 0 16px;color:#e8edf9;font-size:13px;font-weight:700}
+.coop-defense-stats span{padding:8px 12px;background:#233954;border-radius:9px}
+.coop-lanes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:810px;margin:0 auto}
+.coop-lane{position:relative;height:220px;border-radius:14px;border:2px solid #497a9e;background:linear-gradient(180deg,#051d35,#123b50 65%,#144b49);display:flex;flex-direction:column;justify-content:space-between;align-items:center;overflow:hidden;padding:13px;cursor:pointer;color:#e8f8ff}
+.coop-lane.threat{border-color:#f2b65e;background:linear-gradient(180deg,#3d2f37,#203b4a 65%,#18544e)}
+.coop-lane:hover:not(:disabled){border-color:#c0ffe9;box-shadow:0 0 18px #99ffdd3a}
+.coop-lane:disabled{cursor:default;opacity:.6}
+.coop-lane-title{font-size:12px;font-weight:800;letter-spacing:.05em}
+.coop-meteor{position:absolute;top:39px;font-size:38px;filter:drop-shadow(0 0 15px #ff8d4f);animation:meteorFalling 2.6s ease-in infinite}
+.coop-lane-space{font-size:34px;color:#5fa7ca8a}
+.coop-shield{font-size:12px;font-weight:800;padding:7px 5px;border-radius:8px;background:#1c637294;width:100%;text-align:center;position:relative}
+.coop-mosaic-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:350px;margin:18px auto}
+.coop-mosaic-tile{aspect-ratio:1;min-width:0;border-radius:12px;display:grid;place-items:center;align-content:center;gap:0;border:2px solid #6ba6c9;background:radial-gradient(circle at 22% 17%,#32679c,#1a3859);color:#e9f8ff;box-shadow:0 5px 12px #0004;font-weight:800;cursor:pointer}
+.coop-mosaic-tile span{color:#a7e9ff;font-size:12px}
+.coop-mosaic-tile strong{font-size:29px}
+.coop-mosaic-tile.empty{border:2px dashed #557795;background:#091d30;box-shadow:inset 0 0 14px #0c0d24}
+.coop-mosaic-tile.movable{border-color:#a0f5c9;box-shadow:0 0 12px #73ddab39}
+.coop-mosaic-tile.movable:hover:not(:disabled){background:#32786d;transform:scale(1.03)}
+.coop-mosaic-tile.locked{opacity:.74;cursor:default}
+@keyframes turnPulse{50%{box-shadow:0 0 18px #6affcb82}}
+@keyframes coopSymbolBob{50%{transform:translateY(-5px)}}
+@keyframes coopTargetGlow{50%{filter:brightness(1.2)}}
+@keyframes roverBeacon{50%{transform:scale(.96);box-shadow:0 0 23px #4afac69c}}
+@keyframes meteorFalling{0%{transform:translateY(-20px) rotate(-18deg)}85%{transform:translateY(96px) rotate(16deg)}100%{transform:translateY(-20px) rotate(-18deg)}}
+@media(max-width:700px){
+.coop-card{padding:13px;margin:8px 0 15px}
+.coop-top{display:block}.coop-top h2{font-size:19px}.coop-status{display:inline-block;margin:10px 0 0}
+.coop-pads{gap:6px}.coop-pad{min-height:76px;padding:8px 3px}.coop-pad span{font-size:25px}
+.coop-lanes{gap:6px}.coop-lane{height:180px;padding:7px}.coop-shield{font-size:10px}.coop-lane-title{font-size:11px}
+.coop-memory-sequence{gap:5px}.coop-memory-sequence span{width:33px;height:38px;font-size:16px}
+.coop-maze-cell{font-size:18px}
+}
+@media(prefers-reduced-motion:reduce){
+.coop-turn,.coop-pad span,.coop-pulse-target,.coop-maze-cell.rover,.coop-meteor{animation:none!important}
+.coop-pulse-cursor{transition:none!important}
+}

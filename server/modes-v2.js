@@ -9,65 +9,60 @@ export const STAGE_COUNT = STAGES.length;
 export const stageInfo = room => STAGES[Math.max(0,Math.min(STAGE_COUNT-1,(room.stage||1)-1))];
 export const GAME_MODES = {}; // 舊版相容性匯出，不再用於設定／通關。
 
-export function stageGoalList(room) {
-  const c=room.completed, r=room.resources, n=room.requiredBuildings;
-  const stage=room.stage||1, total=room.structures.length, a=room.adventure;
-  if(stage===1) {
+import { TEAM_GAMES } from './team-games.js';
+export function mathStageGoals(room) {
+  const c=room.completed,r=room.resources,n=room.requiredBuildings;
+  const total=room.structures.length,stage=room.stage||1;
+  const safe=()=>({id:'hazards',text:'修復尚未解除的環境異常（'+room.hazards.length+' 項）',met:room.hazards.length===0});
+  if(stage===1){
     const need=Math.max(2,Math.ceil(n/3));
     return [
-      {id:'buildings',text:'完成至少 '+need+' 項初期工程（目前 '+total+'）',met:total>=need},
-      {id:'forest',text:'至少建立 1 片森林（目前 '+c.forest+'）',met:c.forest>=1},
-      {id:'explore',text:'探索 '+explorationTarget(room,1)+' 個地圖區域（目前 '+a.discovered+'）',met:a.discovered>=explorationTarget(room,1)},
-      {id:'power',text:'至少建立 1 座能源站（目前 '+c.power+'）',met:c.power>=1},
-      {id:'oxygen',text:'氧氣達到 26（目前 '+r.oxygen+'）',met:r.oxygen>=26},
-      {id:'energy',text:'能源達到 34（目前 '+r.energy+'）',met:r.energy>=34},
-      {id:'hazards',text:'解決當前宇宙異常（目前 '+room.hazards.length+'）',met:room.hazards.length===0}
+     {id:'buildings',text:'完成 '+need+' 項第一階段數學建設（目前 '+total+'）',met:total>=need},
+     {id:'forest',text:'建立至少 1 座森林',met:c.forest>=1},
+     {id:'power',text:'建立至少 1 座能源站',met:c.power>=1},
+     {id:'oxygen',text:'氧氣至少 26（目前 '+r.oxygen+'）',met:r.oxygen>=26},
+     {id:'energy',text:'能源至少 34（目前 '+r.energy+'）',met:r.energy>=34},
+     safe()
     ];
   }
-  if(stage===2) {
+  if(stage===2){
     const need=Math.max(3,Math.ceil(n*.65));
     return [
-      {id:'buildings',text:'累計完成至少 '+need+' 項工程（目前 '+total+'）',met:total>=need},
-      {id:'crater',text:'完成 1 項以上地形修復（目前 '+c.crater+'）',met:c.crater>=1},
-      {id:'explore',text:'累計探索 '+explorationTarget(room,2)+' 格地圖（目前 '+a.discovered+'）',met:a.discovered>=explorationTarget(room,2)},
-      {id:'pipe',text:'合作接通 1 次水循環管線（目前 '+a.pipeRepairs+'）',met:a.pipeRepairs>=1},
-      {id:'research',text:'完成 1 項科技升級（目前 '+a.upgrades.length+'）',met:a.upgrades.length>=1},
-      {id:'decision',text:'共同處理 1 次探索事件（目前 '+a.decisionsResolved+'）',met:a.decisionsResolved>=1},
-      {id:'water',text:'修復水循環，水資源達到 25（目前 '+r.water+'）',met:r.water>=25},
-      {id:'stability',text:'星球穩定度達到 50（目前 '+r.stability+'）',met:r.stability>=50},
-      {id:'hazards',text:'解除尚未修復的異常（目前 '+room.hazards.length+'）',met:room.hazards.length===0}
+     {id:'buildings',text:'累計完成 '+need+' 項數學建設（目前 '+total+'）',met:total>=need},
+     {id:'crater',text:'完成至少 1 項地形修復',met:c.crater>=1},
+     {id:'water',text:'修復水資源至 25（目前 '+r.water+'）',met:r.water>=25},
+     {id:'stability',text:'穩定度至少 50（目前 '+r.stability+'）',met:r.stability>=50},
+     safe()
     ];
   }
-  const requiredPower=Math.max(1,Math.ceil(n/6));
+  const need=Math.max(1,Math.ceil(n/6));
   return [
-    {id:'buildings',text:'全隊完成 '+n+' 項工程（目前 '+total+'）',met:total>=n},
-    {id:'variety',text:'四種工程各至少完成 1 項',met:['forest','orbit','crater','power'].every(k=>c[k]>=1)},
-    {id:'explore',text:'探索 '+explorationTarget(room,3)+' 格區域（目前 '+a.discovered+'）',met:a.discovered>=explorationTarget(room,3)},
-    {id:'pipe',text:'接通 2 次水循環管線（目前 '+a.pipeRepairs+'）',met:a.pipeRepairs>=2},
-    {id:'research',text:'升級至少 2 項科技（目前 '+a.upgrades.length+'）',met:a.upgrades.length>=2},
-    {id:'decision',text:'作出 2 次團隊環境決策（目前 '+a.decisionsResolved+'）',met:a.decisionsResolved>=2},
-    {id:'power',text:'能源站累計完成 '+requiredPower+' 項（目前 '+c.power+'）',met:c.power>=requiredPower},
-    {id:'orbit',text:'建成至少 1 座星環防護工程（目前 '+c.orbit+'）',met:c.orbit>=1},
-    {id:'challenge',text:'解決 1 次後期危機（已完成 '+(room.stageChallengesResolved||0)+' 次）',met:(room.stageChallengesResolved||0)>=1},
-    {id:'oxygen',text:'氧氣 ≥ 30（目前 '+r.oxygen+'）',met:r.oxygen>=30},
-    {id:'water',text:'水資源 ≥ 25（目前 '+r.water+'）',met:r.water>=25},
-    {id:'energy',text:'能源 ≥ 45（目前 '+r.energy+'）',met:r.energy>=45},
-    {id:'stability',text:'穩定度 ≥ 55（目前 '+r.stability+'）',met:r.stability>=55},
-    {id:'hazards',text:'修復全部宇宙異常（目前 '+room.hazards.length+'）',met:room.hazards.length===0}
+   {id:'buildings',text:'累計完成 '+n+' 項數學建設（目前 '+total+'）',met:total>=n},
+   {id:'variety',text:'森林、能源、修復與星環工程均已建立',met:['forest','power','crater','orbit'].every(k=>c[k]>=1)},
+   {id:'power',text:'能源站至少 '+need+' 項（目前 '+c.power+'）',met:c.power>=need},
+   {id:'oxygen',text:'氧氣 ≥ 30（目前 '+r.oxygen+'）',met:r.oxygen>=30},
+   {id:'water',text:'水資源 ≥ 25（目前 '+r.water+'）',met:r.water>=25},
+   {id:'energy',text:'能源 ≥ 45（目前 '+r.energy+'）',met:r.energy>=45},
+   {id:'stability',text:'穩定度 ≥ 55（目前 '+r.stability+'）',met:r.stability>=55},
+   safe()
   ];
+}
+export function stageGoalList(room) {
+ const goals=mathStageGoals(room);
+ const done=room.teamGamesCompleted?.[room.stage]||0,total=TEAM_GAMES[room.stage].length;
+ goals.push({id:'team',text:'與隊友依序完成 '+total+' 個合作小遊戲（目前 '+done+'/'+total+'）',met:done>=total});
+ return goals;
 }
 export const modeGoalList=stageGoalList;
 export function modeProgress(room) {
-  if(room.result?.win) return 100;
-  if(!room.structures.length) return 0;
-  const goals=stageGoalList(room);
-  const buildings=goals.find(x=>x.id==='buildings');
-  const count=(room.stage||1)===1?Math.max(2,Math.ceil(room.requiredBuildings/3))
-    :(room.stage||1)===2?Math.max(3,Math.ceil(room.requiredBuildings*.65)):room.requiredBuildings;
-  const ratio=Math.min(1,room.structures.length/Math.max(1,count));
-  const rest=goals.filter(g=>g!==buildings);
-  const local=ratio*.6+rest.filter(g=>g.met).length/Math.max(1,rest.length)*.4;
-  return Math.min(99,Math.round((((room.stage||1)-1)+local)/STAGE_COUNT*100));
+ if(room.result?.win)return 100;
+ if(!room.structures.length)return 0;
+ const stage=room.stage||1,goals=stageGoalList(room);
+ const maths=goals.filter(g=>g.id!=='team');
+ const mathRatio=maths.filter(g=>g.met).length/Math.max(1,maths.length);
+ const gameRatio=(room.teamGamesCompleted?.[stage]||0)/2;
+ const partial=mathRatio*.55+gameRatio*.45;
+ return Math.min(99,Math.round(((stage-1)+partial)/3*100));
 }
 export function lifeIndex(room) {
   if(room.result?.win) return 100;

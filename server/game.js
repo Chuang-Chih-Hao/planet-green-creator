@@ -1,9 +1,10 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { makeVariedTask } from './tasks-v3.js';
 import { makeEventTask } from './event-tasks.js';
-import { STAGES, stageInfo, modeGoalList, modeProgress, lifeIndex, HAZARD_INFO } from './modes-v2.js';
+import { STAGES, stageInfo, mathStageGoals, modeGoalList, modeProgress, lifeIndex, HAZARD_INFO } from './modes-v2.js';
 import { makeReviewQuestions, reviewPublicQuestions, gradeReview } from './review.js';
 import { makeAdventure, techBuildBonus, publicAdventure } from './adventure.js';
+import { TEAM_GAMES, startTeamGame, playTeamGame, publicTeamGame, tickTeamGame } from './team-games.js';
 
 export const MAX_PLAYERS = 5;
 export const PI = 3.14;
@@ -115,11 +116,11 @@ export function createRoom(code, hostName = '老師', options = {}) {
     code, hostName: cleanName(hostName) || '老師', hostToken: randomUUID() + randomUUID(),
     createdAt: Date.now(), updatedAt: Date.now(), phase: 'lobby', paused: false,
     durationMinutes: options.durationMinutes || 40, remainingSeconds: (options.durationMinutes || 40) * 60,
-    eventsEnabled: true, difficulty: 'standard', stage: 1, stageChallengesResolved: 0, stageHistory: [], players: [], history: [], structures: [],
+    eventsEnabled: false, difficulty: 'standard', stage: 1, stageChallengesResolved: 0, stageHistory: [], players: [], history: [], structures: [],
     hazards: [], eventsWon: 0, tickCount: 0, lastEventVariants: {},
     event: null, eventIndex: 0, lastEventId: null, eventCountdown: 110, startingPlayers: 0,
     requiredBuildings: 4, resources: { oxygen: 20, water: 30, energy: 25, stability: 70 },
-    completed: { forest: 0, orbit: 0, crater: 0, power: 0 }, adventure:makeAdventure(), result: null
+    completed: { forest: 0, orbit: 0, crater: 0, power: 0 }, adventure:makeAdventure(), teamGame:null, teamGamesCompleted:{1:0,2:0,3:0}, result: null
   };
 }
 
@@ -142,8 +143,8 @@ export function addPlayer(room, nickname) {
 export function startRoom(room) {
   if (room.phase !== 'lobby') throw new Error('目前無法開始');
   if (!room.players.length) throw new Error('至少需要 1 位學生才能開始');
-  room.phase = 'playing'; room.paused = false;
-  room.stage = 1; room.stageChallengesResolved = 0; room.stageHistory=[];room.adventure=makeAdventure();
+  room.phase = 'playing'; room.paused = false; room.pausedAt=null;
+  room.stage = 1; room.stageChallengesResolved = 0; room.stageHistory=[];room.adventure=makeAdventure();room.teamGame=null;room.teamGamesCompleted={1:0,2:0,3:0};
   room.startingPlayers = room.players.length;
   room.requiredBuildings = goalForCount(room.startingPlayers, room.durationMinutes);
   room.remainingSeconds = room.durationMinutes * 60;
@@ -153,7 +154,7 @@ export function startRoom(room) {
     player.task = makeTask(player.selectedKind, room.difficulty, Math.random, player.lastVariants[player.selectedKind], player.recentQuestions);
     player.lastVariants[player.selectedKind] = player.task.variant;
   }
-  log(room, 'system', `任務啟動：${room.startingPlayers} 人模式，數學建造、地圖探索、管線修復、科技研究與團隊決策並行；最終至少 ${room.requiredBuildings} 項工程。`);
+  log(room, 'system', `任務啟動：先完成一段數學建設，再由全隊合作完成不同類型小遊戲；三關各有兩種操作遊戲，最終累計 ${room.requiredBuildings} 項工程。`);
 }
 
 export function log(room, type, message, extra = {}) {
@@ -192,6 +193,7 @@ function diagnoseMistake(task, reason, value) {
 export function buildResult(room, player, submitted) {
   if (room.phase !== 'playing' || room.paused) throw new Error('遊戲尚未開始或已暫停');
   if (room.result) throw new Error('本局已結束');
+  if (room.teamGame) throw new Error('現在是全隊合作小遊戲時間，完成後才能繼續數學建造');
   const task = player.task;
   if (!task || task.id !== submitted.taskId) throw new Error('題目已更新，請重新作答');
   const quiz = task.type === 'choice' || task.type === 'trueFalse';
@@ -273,34 +275,61 @@ export function submitReview(room,player,body) {
   log(room,'review',`${player.name} 已完成課後數學回顧（${player.review.correct}/${player.review.total}）`,{player:player.name});
   return {correct:player.review.correct,total:player.review.total};
 }
+export function completeTeamGame(room,player,body) {
+ const result=playTeamGame(room,player,body);
+ if(!result.completed)return result;
+ if(!room.teamGame)throw new Error('合作小遊戲已結束');
+ const previous=room.teamGame;
+ room.teamGame=null;
+ room.teamGamesCompleted[room.stage]=(room.teamGamesCompleted[room.stage]||0)+1;
+ adjustResources(room.resources,result.reward);
+ log(room,'team',player.name+' 協助全隊完成「'+previous.title+'」！', {player:player.name,game:previous.kind});
+ checkWin(room);
+ return result;
+}
+export function skipTeamGame(room) {
+ if(!room.teamGame)throw new Error('目前沒有需要略過的合作遊戲');
+ const game=room.teamGame;
+ room.teamGame=null;
+ room.teamGamesCompleted[room.stage]=(room.teamGamesCompleted[room.stage]||0)+1;
+ log(room,'system','教師略過合作遊戲「'+game.title+'」，不額外發放完成獎勵。');
+ checkWin(room);
+ return {message:'已略過 '+game.title};
+}
 export function checkWin(room) {
-  if(room.phase!=='playing'||!room.players.length||room.event||room.paused)return false;
-  if(!modeGoalList(room).every(g=>g.met))return false;
-  if(room.stage<3) {
-    const prior=stageInfo(room);
-    room.stageHistory.push({stage:room.stage,title:prior.title,finishedAt:Date.now()});
-    room.stage++;
-    const next=stageInfo(room);
-    log(room,'stage',`🎉 完成「${prior.title}」，進入第 ${room.stage} 關「${next.title}」！`);
-    if(room.stage===2){
-      adjustResources(room.resources,{water:-8});
-      log(room,'warning','💧 新關卡危機：開發後發生乾旱，水資源減少 8。請修復地形，建立水循環。');
-    } else if(room.stage===3) {
-      log(room,'warning','🛡️ 最終關卡：太陽風暴正在逼近！要完成事件解題或災後修復。');
-      triggerEvent(room,'flare'); // 即使教師關閉自動事件，關卡劇情危機仍會發生一次。
-    }
-    return false;
-  }
-  room.phase='finished';room.paused=false;
-  room.result={win:true,title:'生命核心啟動成功！',description:'完成荒土甦醒、水土復育、文明守護三關，星球已進入生命時代。請完成課後數學回顧。'};
-  room.stageHistory.push({stage:3,title:stageInfo(room).title,finishedAt:Date.now()});
-  prepareReviews(room);
-  log(room,'victory','🌍 全隊完成三關星球發展與危機處理！現在進入課後數學回顧。');
-  return true;
+ if(room.phase!=='playing'||!room.players.length||room.event||room.paused)return false;
+ if(room.teamGame)return false;
+ if(!mathStageGoals(room).every(g=>g.met))return false;
+ if((room.teamGamesCompleted[room.stage]||0)<TEAM_GAMES[room.stage].length){
+   const g=startTeamGame(room);
+   log(room,'team','🎮 進入全隊合作小遊戲 '+g.index+'/'+g.total+'：「'+g.title+'」。請輪流操作、討論。');
+   return false;
+ }
+ if(room.stage<3){
+   const prior=stageInfo(room);
+   room.stageHistory.push({stage:room.stage,title:prior.title,finishedAt:Date.now()});
+   room.stage++;
+   const next=stageInfo(room);
+   log(room,'stage','🎉 完成「'+prior.title+'」的數學建造與兩個合作小遊戲，進入第 '+room.stage+' 關「'+next.title+'」！');
+   if(room.stage===2){
+     adjustResources(room.resources,{water:-8});
+     log(room,'warning','💧 新關卡危機：乾旱讓水資源減少 8，需要完成地形工程並合作修復水管。');
+   }
+   if(room.stage===3){
+     log(room,'warning','🛡️ 最終關卡：完成數學建造後，大家要合作攔截隕石及修復星圖。');
+   }
+   return false;
+ }
+ room.phase='finished';room.paused=false;room.teamGame=null;
+ room.result={win:true,title:'生命核心啟動成功！',description:'全隊依序完成三段數學建設與六款合作小遊戲，星球恢復生機。請完成課後數學回顧。'};
+ room.stageHistory.push({stage:3,title:stageInfo(room).title,finishedAt:Date.now()});
+ prepareReviews(room);
+ log(room,'victory','🌍 全隊完成三關數學與六款合作挑戰，進入課後數學回顧！');
+ return true;
 }
 
 export function triggerEvent(room, selectedId) {
-  if (room.phase !== 'playing' || room.paused || room.event) throw new Error('目前無法觸發新事件');
+  if (room.phase !== 'playing' || room.paused || room.event || room.teamGame) throw new Error('目前無法觸發新事件');
   const ids = Object.keys(EVENTS);
   const options = ids.filter(item => item !== room.lastEventId);
   const id = selectedId && ids.includes(selectedId) ? selectedId : choice(options.length ? options : ids);
@@ -363,15 +392,15 @@ export function failEvent(room) {
 
 export function finishRoom(room, reason = '老師已結束本局') {
   if (room.phase === 'finished') return;
-  room.phase = 'finished'; room.event = null; room.paused = false;
+  room.phase = 'finished'; room.event = null; room.teamGame=null; room.paused = false;
   room.result = { win: false, title: '星球探索告一段落', description: reason+' 現在可以完成課後數學回顧。' };
   prepareReviews(room);
   log(room, 'system', reason);
 }
 
 export function resetRoom(room) {
-  room.phase = 'lobby'; room.paused = false; room.remainingSeconds = room.durationMinutes * 60;
-  room.event = null; room.eventIndex = 0; room.lastEventId = null; room.eventCountdown = 110;
+  room.phase = 'lobby'; room.paused = false; room.pausedAt=null; room.remainingSeconds = room.durationMinutes * 60;
+  room.event = null; room.teamGame=null; room.teamGamesCompleted={1:0,2:0,3:0}; room.eventIndex = 0; room.lastEventId = null; room.eventCountdown = 110;
   room.hazards = []; room.eventsWon = 0; room.tickCount = 0; room.lastEventVariants = {}; room.stage=1; room.stageHistory=[];room.stageChallengesResolved=0;
   room.structures = []; room.completed = { forest: 0, orbit: 0, crater: 0, power: 0 }; room.adventure=makeAdventure();
   room.resources = { oxygen: 20, water: 30, energy: 25, stability: 70 };
@@ -393,10 +422,11 @@ export function tick(room) {
     adjustResources(room.resources, { water: -1, energy: -1 });
     log(room, 'warning', '文明守護：維生系統每 45 秒消耗 1 水資源與 1 能源。');
   }
+  tickTeamGame(room);
   if (room.event) {
     room.event.secondsLeft--;
     if (room.event.secondsLeft <= 0) failEvent(room);
-  } else if (room.eventsEnabled) {
+  } else if (room.eventsEnabled && !room.teamGame) {
     room.eventCountdown--;
     if (room.eventCountdown <= 0) triggerEvent(room);
   }
@@ -423,7 +453,7 @@ export function publicState(room, token) {
   }));
   return {
     code: room.code, hostName: room.hostName, role: isHost ? 'host' : 'student',
-    myId: me?.id ?? null, phase: room.phase, paused: room.paused,
+    myId: me?.id ?? null, phase: room.phase, paused: room.paused, pausedAt:room.pausedAt||null,
     durationMinutes: room.durationMinutes, remainingSeconds: room.remainingSeconds,
     difficulty: room.difficulty, eventsEnabled: room.eventsEnabled, stage:room.stage,
     stageCount:STAGES.length,stageInfo:stageInfo(room),stageHistory:room.stageHistory,
@@ -434,6 +464,7 @@ export function publicState(room, token) {
     requiredBuildings: room.requiredBuildings, resources: room.resources,
     completed: room.completed, structures: room.structures, buildingsTotal: total,
     adventure:publicAdventure(room),
+    teamGame:publicTeamGame(room,me),teamGamesCompleted:room.teamGamesCompleted,
     allKindsComplete: diversified, progress: modeProgress(room), lifeIndex: lifeIndex(room),
     event, eventCountdown: room.eventCountdown, result: room.result,
     history: room.history.slice(0, isHost ? 100 : 14),

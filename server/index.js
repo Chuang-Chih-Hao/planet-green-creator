@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 import {
   MAX_PLAYERS, TASK_KINDS, goalForCount, createRoom, addPlayer, newCode, publicState,
   makeTask, startRoom, buildResult, triggerEvent, solveEvent, log,
-  resetRoom, finishRoom, tick, checkWin, submitReview
+  resetRoom, finishRoom, tick, checkWin, submitReview, completeTeamGame, skipTeamGame
 } from './game.js';
-import { exploreSector, chooseDecision, rotatePipe, purchaseTech } from './adventure.js';
+import { shiftTeamGameTime } from './team-games.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.resolve(__dirname, '../client');
@@ -187,8 +187,9 @@ async function api(req, res, pathname, searchParams) {
     } else if (action === 'pause') {
       requireHost(session);
       if (room.phase !== 'playing') throw new HttpError('遊戲尚未開始');
-      room.paused = !room.paused;
-      log(room, 'system', room.paused ? '老師已暫停時間與事件。' : '老師已恢復任務。');
+      if(!room.paused){room.paused=true;room.pausedAt=Date.now();}
+      else{const diff=Math.max(0,Date.now()-(room.pausedAt||Date.now()));shiftTeamGameTime(room,diff);room.paused=false;room.pausedAt=null;}
+      log(room, 'system', room.paused ? '老師已暫停時間與合作遊戲。' : '老師已恢復任務。');
     } else if (action === 'settings') {
       requireHost(session);
       if (['basic', 'standard', 'advanced'].includes(body.difficulty)) room.difficulty = body.difficulty;
@@ -211,6 +212,9 @@ async function api(req, res, pathname, searchParams) {
       room.eventCountdown = 110;
       // 教師明確略過劇情危機視為教學管理特例，避免自動事件關閉後卡關。
       if(room.stage===3){room.stageChallengesResolved++;checkWin(room);}
+    } else if (action === 'skipTeamGame') {
+      requireHost(session);
+      try{ feedback=skipTeamGame(room); }catch(e){throw new HttpError(e.message);}
     } else if (action === 'finish') {
       requireHost(session);
       finishRoom(room);
@@ -239,7 +243,7 @@ async function api(req, res, pathname, searchParams) {
       log(room, 'system', `${removed.name} 已退出房間，已重新平衡建造目標。`);
     } else if (action === 'selectTask') {
       requireStudent(session);
-      if (room.phase !== 'playing' || room.paused) throw new HttpError('請等候老師開始或恢復遊戲');
+      if (room.phase !== 'playing' || room.paused || room.teamGame) throw new HttpError('請等候數學建造階段');
       if (!TASK_KINDS.includes(body.kind)) throw new HttpError('無效的建造類型');
       session.player.selectedKind = body.kind;
       session.player.task = makeTask(body.kind, room.difficulty, Math.random, session.player.lastVariants?.[body.kind], session.player.recentQuestions);
@@ -248,7 +252,7 @@ async function api(req, res, pathname, searchParams) {
       session.player.hintUsed = false;
     } else if (action === 'hint') {
       requireStudent(session);
-      if (room.phase !== 'playing' || room.paused) throw new HttpError('遊戲暫停中');
+      if (room.phase !== 'playing' || room.paused || room.teamGame) throw new HttpError('目前不是數學建造階段');
       if (!session.player.hintUsed) session.player.hints++;
       session.player.hintUsed = true;
       feedback = { hint: session.player.task?.hint };
@@ -260,18 +264,11 @@ async function api(req, res, pathname, searchParams) {
       requireStudent(session);
       try { feedback = solveEvent(room, session.player, body); }
       catch (e) { throw new HttpError(e.message); }
-    } else if (['explore','decision','pipeRotate','research'].includes(action)) {
+    } else if (action === 'teamMove') {
       requireStudent(session);
-      try {
-        const player = session.player;
-        if (action==='explore') feedback=exploreSector(room,player,body.index);
-        if (action==='decision') feedback=chooseDecision(room,player,body.choice);
-        if (action==='pipeRotate') feedback=rotatePipe(room,player,body.index);
-        if (action==='research') feedback=purchaseTech(room,player,body.techId);
-        log(room,action==='explore'?'explore':action==='decision'?'decision':action==='pipeRotate'?'pipe':'research',
-          feedback.message || '探險隊採取行動', {player:player.name});
-        checkWin(room);
-      } catch (e) { throw new HttpError(e.message); }
+      try { feedback=completeTeamGame(room,session.player,body); }
+      catch(e){throw new HttpError(e.message);}
+      log(room,'teamMove',session.player.name+'：'+(feedback?.message||'操作合作小遊戲'),{player:session.player.name});
     } else if (action === 'submitReview') {
       requireStudent(session);
       try { feedback = submitReview(room, session.player, body); }
@@ -312,10 +309,10 @@ const server = http.createServer(async (req, res) => {
 
 const timer = setInterval(() => {
   for (const room of rooms.values()) {
-    const oldEvent = room.event?.id, oldPhase = room.phase;
+    const oldEvent = room.event?.id, oldPhase = room.phase, oldTeamVersion=room.teamGame?.version;
     tick(room);
     if (room.phase === 'playing' || room.phase !== oldPhase) clock(room);
-    if (oldEvent !== room.event?.id || room.phase !== oldPhase) broadcast(room);
+    if (oldEvent !== room.event?.id || room.phase !== oldPhase || oldTeamVersion!==room.teamGame?.version) broadcast(room);
     if (Date.now() - room.updatedAt > 6 * 60 * 60 * 1000) {
       for (const player of room.players) sessions.delete(player.token);
       sessions.delete(room.hostToken);
