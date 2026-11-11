@@ -7,6 +7,8 @@ import { makeAdventure, techBuildBonus, publicAdventure } from './adventure.js';
 import { TEAM_GAMES, startTeamGame, playTeamGame, publicTeamGame, tickTeamGame } from './team-games.js';
 
 export const MAX_PLAYERS = 5;
+export const MAX_GAME_MINUTES=30;
+export const EVENT_INTERVAL_SECONDS=180;
 export const PI = 3.14;
 export const TASK_KINDS = ['forest', 'orbit', 'crater', 'power'];
 export const FORMULAS = [
@@ -31,9 +33,9 @@ export function cleanName(name) {
   return safeStr(name).replace(/[<>\\]/g, '').replace(/\s+/g, ' ').slice(0, 16);
 }
 
-export function goalForCount(n, durationMinutes = 40) {
+export function goalForCount(n, durationMinutes = 30) {
   // V1.5：數學只是四大玩法之一；降低答題數，改由探索、接水管和科技研究共同通關。
-  const perPlayer = durationMinutes >= 40 ? 4 : durationMinutes >= 25 ? 3 : 2;
+  const perPlayer = durationMinutes >= 25 ? 3 : 2;
   return Math.max(4, perPlayer * Math.min(MAX_PLAYERS, Math.max(1, n)));
 }
 
@@ -115,10 +117,10 @@ export function createRoom(code, hostName = '老師', options = {}) {
   return {
     code, hostName: cleanName(hostName) || '老師', hostToken: randomUUID() + randomUUID(),
     createdAt: Date.now(), updatedAt: Date.now(), phase: 'lobby', paused: false,
-    durationMinutes: options.durationMinutes || 40, remainingSeconds: (options.durationMinutes || 40) * 60,
-    eventsEnabled: false, difficulty: 'standard', stage: 1, stageChallengesResolved: 0, stageHistory: [], players: [], history: [], structures: [],
+    durationMinutes: Math.min(MAX_GAME_MINUTES,Math.max(1,Number(options.durationMinutes)||30)), remainingSeconds: Math.min(MAX_GAME_MINUTES,Math.max(1,Number(options.durationMinutes)||30))*60,
+    eventsEnabled: true, difficulty: 'standard', stage: 1, stageChallengesResolved: 0, stageHistory: [], players: [], history: [], structures: [],
     hazards: [], eventsWon: 0, tickCount: 0, lastEventVariants: {},
-    event: null, eventIndex: 0, lastEventId: null, eventCountdown: 110, startingPlayers: 0,
+    event: null, eventIndex: 0, lastEventId: null, eventCountdown: EVENT_INTERVAL_SECONDS, startingPlayers: 0,
     requiredBuildings: 4, resources: { oxygen: 20, water: 30, energy: 25, stability: 70 },
     completed: { forest: 0, orbit: 0, crater: 0, power: 0 }, adventure:makeAdventure(), teamGame:null, teamGamesCompleted:{1:0,2:0,3:0}, result: null
   };
@@ -143,12 +145,13 @@ export function addPlayer(room, nickname) {
 export function startRoom(room) {
   if (room.phase !== 'lobby') throw new Error('目前無法開始');
   if (!room.players.length) throw new Error('至少需要 1 位學生才能開始');
+  room.durationMinutes=Math.min(MAX_GAME_MINUTES,room.durationMinutes);
   room.phase = 'playing'; room.paused = false; room.pausedAt=null;
   room.stage = 1; room.stageChallengesResolved = 0; room.stageHistory=[];room.adventure=makeAdventure();room.teamGame=null;room.teamGamesCompleted={1:0,2:0,3:0};
   room.startingPlayers = room.players.length;
   room.requiredBuildings = goalForCount(room.startingPlayers, room.durationMinutes);
   room.remainingSeconds = room.durationMinutes * 60;
-  room.eventCountdown = 110;
+  room.eventCountdown = EVENT_INTERVAL_SECONDS;
   for (const player of room.players) {
     player.recentQuestions=[]; player.reviewQuestions=null; player.review=null;
     player.task = makeTask(player.selectedKind, room.difficulty, Math.random, player.lastVariants[player.selectedKind], player.recentQuestions);
@@ -338,7 +341,7 @@ export function triggerEvent(room, selectedId) {
   room.eventIndex++; room.lastEventId = id;
   const task = makeEventTask(id,Math.random,room.lastEventVariants[id]);
   room.lastEventVariants[id] = task.variant;
-  room.eventCountdown = 120;
+  room.eventCountdown = EVENT_INTERVAL_SECONDS;
   const hazardId = randomUUID();
   adjustResources(room.resources, event.impact);
   room.hazards.push({ key: hazardId, id, name: event.name, emoji: event.emoji, status: 'active', ...HAZARD_INFO[id] });
@@ -401,7 +404,7 @@ export function finishRoom(room, reason = '老師已結束本局') {
 
 export function resetRoom(room) {
   room.phase = 'lobby'; room.paused = false; room.pausedAt=null; room.remainingSeconds = room.durationMinutes * 60;
-  room.event = null; room.teamGame=null; room.teamGamesCompleted={1:0,2:0,3:0}; room.eventIndex = 0; room.lastEventId = null; room.eventCountdown = 110;
+  room.event = null; room.teamGame=null; room.teamGamesCompleted={1:0,2:0,3:0}; room.eventIndex = 0; room.lastEventId = null; room.eventCountdown = EVENT_INTERVAL_SECONDS;
   room.hazards = []; room.eventsWon = 0; room.tickCount = 0; room.lastEventVariants = {}; room.stage=1; room.stageHistory=[];room.stageChallengesResolved=0;
   room.structures = []; room.completed = { forest: 0, orbit: 0, crater: 0, power: 0 }; room.adventure=makeAdventure();
   room.resources = { oxygen: 20, water: 30, energy: 25, stability: 70 };
@@ -427,9 +430,14 @@ export function tick(room) {
   if (room.event) {
     room.event.secondsLeft--;
     if (room.event.secondsLeft <= 0) failEvent(room);
-  } else if (room.eventsEnabled && !room.teamGame) {
-    room.eventCountdown--;
-    if (room.eventCountdown <= 0) triggerEvent(room);
+  }
+  // 以遊戲時間每 180 秒安排一次，合作遊戲/事件進行時保留到期事件；
+  // 等到數學建造階段才安全觸發，不會中斷團隊小遊戲。
+  if (room.eventsEnabled) {
+    room.eventCountdown=Math.max(0,room.eventCountdown-1);
+    if (room.eventCountdown===0&&!room.event&&!room.teamGame&&room.remainingSeconds>0) {
+      triggerEvent(room);
+    }
   }
   if (room.remainingSeconds <= 0) finishRoom(room, '任務時間已結束，可檢討各項數學建造紀錄。');
   return true;

@@ -101,3 +101,14 @@ export function updateTeamClocks(s){
   document.querySelectorAll('[data-defense-clock]').forEach(n=>n.textContent=remaining+' 秒');
  }
 }
+
+/* Keep cursor at the same modulo position as the server; 100%→0% teleports,
+   it must never animate backward across the green charging zone. */
+export function animatePulseCursor(s){
+ if(!s?.teamGame||s.teamGame.kind!=='pulse')return;
+ const g=s.teamGame;
+ const timestamp=s.paused&&s.pausedAt?s.pausedAt:Date.now();
+ const phase=((timestamp-g.startedAt)%g.cycleMs+g.cycleMs)%g.cycleMs/g.cycleMs;
+ const cursor=document.querySelector('[data-pulse-cursor]');
+ if(cursor)cursor.style.left=(phase*100)+'%';
+}

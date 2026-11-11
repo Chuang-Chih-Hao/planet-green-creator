@@ -50,7 +50,14 @@ export function stageGoalList(room) {
  const goals=mathStageGoals(room);
  const done=room.teamGamesCompleted?.[room.stage]||0,total=TEAM_GAMES[room.stage].length;
  goals.push({id:'team',text:'與隊友依序完成 '+total+' 個合作小遊戲（目前 '+done+'/'+total+'）',met:done>=total});
- return goals;
+ const labels={
+  buildings:'📐 四種建造合計',forest:'🌳 森林',power:'⚡ 能源',
+  crater:'🛠️ 修復',orbit:'🛰️ 星環',variety:'🌳⚡🛠️🛰️ 各建一次',
+  oxygen:'🌳 森林補充氧氣',water:'🛠️ 修復補充水資源',
+  energy:'⚡ 能源補充電力',stability:'🛠️ 修復 / 🛰️ 星環提升穩定度',
+  hazards:'☄️ 事件受損後，依異常提示建設對應工程',team:'🎮 階段合作小遊戲'
+ };
+ return goals.map(goal=>({...goal,text:(labels[goal.id]||'📋 本關目標')+'：'+goal.text}));
 }
 export const modeGoalList=stageGoalList;
 export function modeProgress(room) {

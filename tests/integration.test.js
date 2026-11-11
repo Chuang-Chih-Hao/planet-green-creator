@@ -137,7 +137,7 @@ test('兩位學生的估算題有四個選項，教師能看到選項但學生�
  assert.ok(t.context.startsWith('估算任務'),'本測試應使用數值估算題，而不是觀念題');
  assert.equal(t.type,'choice');
  assert.equal(t.choices.length,4);
- assert.ok(t.choices.every(x=>/公里/.test(x.label)));
+ assert.ok(t.choices.every(x=>/km/.test(x.label)));
  assert.equal(t.answer,undefined);
  assert.equal(t.estimate,undefined);
  assert.equal(t.steps,undefined);
@@ -181,4 +181,30 @@ test('多人記憶接力為私人位置線索：每位僅兩格，沒有完整�
  assert.equal(hit.state.teamGame.step,1);
  assert.equal(hit.state.teamGame.clueHolderName,'小安');
  assert.equal(hit.state.teamGame.turnName,'小柏');
+});
+
+test('教師最多可選 30 分鐘、宇宙事件預設開啟且是固定倒數',async()=>{
+ const h=await post('create',{name:'三十分鐘測試'});
+ assert.equal(h.state.durationMinutes,30);
+ assert.equal(h.state.remainingSeconds,1800);
+ assert.equal(h.state.eventsEnabled,true);
+ const a=await post('action',{token:h.token,action:'settings',durationMinutes:40});
+ assert.equal(a.state.durationMinutes,30,'不接受超過 30 分鐘');
+ const b=await post('action',{token:h.token,action:'settings',durationMinutes:25,eventsEnabled:true});
+ assert.equal(b.state.durationMinutes,25);
+ const c=await post('action',{token:h.token,action:'settings',durationMinutes:30});
+ assert.equal(c.state.durationMinutes,30);
+});
+test('接手等待更新為 60 秒、能源核心迷宮公開尺寸與收集進度',async()=>{
+ const h=await post('create',{name:'合作測試'});
+ const p=await post('join',{name:'駕駛員',code:h.state.code});
+ await post('action',{token:h.token,action:'settings',durationMinutes:15});
+ await post('action',{token:h.token,action:'start'});
+ await doTask(h.token,p.token,'forest');
+ await doTask(h.token,p.token,'power');
+ const before=await state(p.token);
+ assert.equal(before.teamGame.kind,'memory');
+ const js=await (await fetch(base+'/team-ui.js')).text();
+ assert.match(js,/60000/,'前端接手權限應等待 60 秒');
+ assert.match(js,/6×6/,'迷宮說明應清楚列出 6×6 大小');
 });

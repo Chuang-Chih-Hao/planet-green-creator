@@ -12,7 +12,7 @@ const INFO={
   memory:{title:'🌱 生命核心・線索接力',hint:'每人只會看到自己負責的 2 個位置線索。持有第 N 格線索的同學口頭告訴操作員符號，操作員再按下對應節點。'},
   pulse:{title:'⚡ 光能共振・節奏校準',hint:'觀察正在移動的能量光標。每次輪到一位隊友，光標進入綠區時按下充能。'},
   pipe:{title:'💧 修復水道・旋轉水管',hint:'合作轉動水管，把左上入口連到右下出口，讓水循環恢復。'},
-  rover:{title:'🚜 救援車・迷宮導航',hint:'每人輪流控制救援車方向，避開障礙，抵達星球另一端的基地。'},
+  rover:{title:'🚜 救援車・能量核心迷宮',hint:'6×6 岩石迷宮：先找到兩顆分散的能源核心，再抵達右下方基地。需要回頭、規劃路線並輪流導航。'},
   defense:{title:'☄️ 隕石攔截・聯手防護',hint:'看清隕石會落在哪條航道，輪流點擊相同航道的護盾，在倒數結束前攔截。'},
   mosaic:{title:'🪐 星圖修復・滑動拼圖',hint:'點擊空格旁邊的星圖碎片，把 1 到 8 依序排好，完成星球防護圖。'}
 };
@@ -34,7 +34,7 @@ function member(room,g){
 }
 function who(room,g,player){
  const selected=member(room,g);
- return !selected ||selected.id===player.id || !selected.connected || now()-g.turnAt>12000;
+ return !selected ||selected.id===player.id || !selected.connected || now()-g.turnAt>60000;
 }
 function ports(c){
  return (c.kind==='straight'?['N','S']:['N','E']).map(d=>DIRS[(DIRS.indexOf(d)+c.rotation)%4]);
@@ -55,14 +55,16 @@ function pipeFlow(pipe){
  return flow;
 }
 const ROVER_MAPS=[
- {path:[0,1,2,7,12,13,14,19,24],extra:[6,11,21]},
- {path:[0,5,10,11,12,13,14,19,24],extra:[1,6,18]},
- {path:[0,1,6,11,12,17,22,23,24],extra:[2,7,13]}
+ // A 6x6 multi-branch maze: both cores are on detours, not on the direct exit route.
+ {path:[0,1,2,3,4,5,11,17,23,29,35],branchA:[7,13,19,25],branchB:[16,15,21,27,33],cores:[25,33]},
+ {path:[0,6,12,18,24,30,31,32,33,34,35],branchA:[1,2,3,9,15],branchB:[19,20,21,22,16],cores:[15,16]},
+ {path:[0,1,7,13,19,25,31,32,33,34,35],branchA:[6,12,18,24,30],branchB:[8,9,10,16,22,28],cores:[30,28]}
 ];
-function roverMap(){
- const candidate=ROVER_MAPS[rand(ROVER_MAPS.length)];
- const open=new Set([...candidate.path,...candidate.extra]);
- return Array.from({length:25},(_,i)=>open.has(i)?'open':'wall');
+export function roverMap(rng=Math.random){
+ const candidate=ROVER_MAPS[Math.min(ROVER_MAPS.length-1,Math.floor(Math.max(0,rng())*ROVER_MAPS.length))];
+ const open=new Set([...candidate.path,...candidate.branchA,...candidate.branchB]);
+ return {map:Array.from({length:36},(_,i)=>open.has(i)?'open':'wall'),
+  cores:[...candidate.cores]};
 }
 function slideNeighbors(i){
  const result=[];
@@ -108,7 +110,7 @@ export function startTeamGame(room){
   g.targetRange=[0.28,0.65];g.lastPressedAt=0;
  }
  if(kind==='pipe')g.pipe=makePipeline(1);
- if(kind==='rover'){g.map=roverMap();g.rover=0;g.goal=24;}
+ if(kind==='rover'){const maze=roverMap();g.map=maze.map;g.cores=maze.cores;g.collected=[];g.rover=0;g.goal=35;g.mapSize=6;}
  if(kind==='defense'){
   g.lane=rand(3);g.hits=0;g.goal=Math.max(6,room.players.length+2);
   g.deadlineAt=at+13000;g.misses=0;
@@ -147,7 +149,9 @@ function play(room,player,body) {
   if(now()-g.lastPressedAt<500)return reject('請觀察光標的下一次移動。');
   g.lastPressedAt=now();
   const pos=((now()-g.startedAt)%g.cycleMs)/g.cycleMs;
-  if(pos<g.targetRange[0]||pos>g.targetRange[1]){
+  // 160 ms allowance covers normal browser/network latency, not the 0→100% wrap.
+  const allowance=160/g.cycleMs;
+  if(pos<g.targetRange[0]-allowance||pos>g.targetRange[1]+allowance){
    g.version++;
    return reject('還沒有對準綠色區域，請觀察光標再試。');
   }
@@ -165,12 +169,15 @@ function play(room,player,body) {
  }
  if(g.kind==='rover'){
   if(!DIRS.includes(op))throw new Error('請選擇上下左右方向');
-  const from=g.rover,to=from+({N:-5,E:1,S:5,W:-1}[op]);
-  if(to<0||to>=25||(op==='W'&&from%5===0)||(op==='E'&&from%5===4)||g.map[to]==='wall')
-   return reject('🚧 前面有障礙或邊界，請討論另一條路線。');
-  g.rover=to;advance(g,player);
-  if(g.rover===g.goal)return finished(g);
-  return reject('🚜 救援車已前進，下一位隊友繼續導航。');
+  const from=g.rover,to=from+({N:-6,E:1,S:6,W:-1}[op]);
+  if(to<0||to>=36||(op==='W'&&from%6===0)||(op==='E'&&from%6===5)||g.map[to]==='wall')
+   return reject('🚧 前面是岩石或地圖邊界，請隊友一起規劃替代路線。');
+  g.rover=to;
+  if(g.cores.includes(to)&&!g.collected.includes(to))g.collected.push(to);
+  advance(g,player);
+  if(g.rover===g.goal&&g.collected.length===g.cores.length)return finished(g);
+  if(g.rover===g.goal)return reject('🏠 抵達基地了，但還有 '+(g.cores.length-g.collected.length)+' 顆能源核心未收集！必須回頭尋找。');
+  return reject('🚜 已移動；能源核心 '+g.collected.length+'/'+g.cores.length+'，下一位隊友繼續。');
  }
  if(g.kind==='defense'){
   const lane=Number(body.index);
@@ -254,7 +261,7 @@ export function publicTeamGame(room,viewer){
   const flowing=pipeFlow(g.pipe);
   return {...base,cells:g.pipe.cells.map((c,i)=>({kind:c.kind,ports:ports(c),flowing:flowing.has(i)}))};
  }
- if(g.kind==='rover')return {...base,map:g.map,position:g.rover,goal:g.goal};
+ if(g.kind==='rover')return {...base,map:g.map,position:g.rover,goal:g.goal,mapSize:6,cores:g.cores,collected:g.collected};
  if(g.kind==='defense')return {...base,lane:g.lane,hits:g.hits,goal:g.goal,
   deadlineAt:g.deadlineAt,misses:g.misses};
  if(g.kind==='mosaic')return {...base,tiles:g.tiles};

@@ -194,7 +194,7 @@ async function api(req, res, pathname, searchParams) {
       requireHost(session);
       if (['basic', 'standard', 'advanced'].includes(body.difficulty)) room.difficulty = body.difficulty;
       if (typeof body.eventsEnabled === 'boolean') room.eventsEnabled = body.eventsEnabled;
-      if (room.phase === 'lobby' && [15, 25, 40].includes(Number(body.durationMinutes))) {
+      if (room.phase === 'lobby' && [15, 25, 30].includes(Number(body.durationMinutes))) {
         room.durationMinutes = Number(body.durationMinutes);
         room.remainingSeconds = room.durationMinutes * 60;
         room.requiredBuildings = goalForCount(room.players.length, room.durationMinutes);
@@ -209,7 +209,7 @@ async function api(req, res, pathname, searchParams) {
       room.hazards = room.hazards.filter(h => h.key !== hazardId);
       log(room, 'system', '老師已略過事件：移除當次異常，但已發生的初始資源衝擊仍保留。');
       room.event = null;
-      room.eventCountdown = 110;
+      room.eventCountdown = 180;
       // 教師明確略過劇情危機視為教學管理特例，避免自動事件關閉後卡關。
       if(room.stage===3){room.stageChallengesResolved++;checkWin(room);}
     } else if (action === 'skipTeamGame') {
