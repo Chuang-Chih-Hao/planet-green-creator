@@ -188,7 +188,7 @@ async function api(req, res, pathname, searchParams) {
       requireHost(session);
       if (room.phase !== 'playing') throw new HttpError('遊戲尚未開始');
       if(!room.paused){room.paused=true;room.pausedAt=Date.now();}
-      else{const diff=Math.max(0,Date.now()-(room.pausedAt||Date.now()));shiftTeamGameTime(room,diff);room.paused=false;room.pausedAt=null;}
+      else{const diff=Math.max(0,Date.now()-(room.pausedAt||Date.now()));shiftTeamGameTime(room,diff);room.paused=false;room.pausedAt=null;checkWin(room);}
       log(room, 'system', room.paused ? '老師已暫停時間與合作遊戲。' : '老師已恢復任務。');
     } else if (action === 'settings') {
       requireHost(session);

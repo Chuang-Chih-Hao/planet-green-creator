@@ -1,9 +1,8 @@
-// V1.5：三關要完成數學建設＋合作冒險，不再只是反覆計算。
-import { explorationTarget } from './adventure.js';
+// V1.6：三段數學建造交替六款全隊同步、不同機制的小遊戲。
 export const STAGES = [
   { id:1, title:'荒土甦醒', emoji:'🌱', subtitle:'建立第一片森林與能源基地', problem:'荒蕪星球缺少氧氣與電力，必須先啟動造林及發電。' },
   { id:2, title:'水土復育', emoji:'💧', subtitle:'修復乾旱、建立穩定的水循環', problem:'第一階段開發造成水資源下降！必須修復地形、建設水循環。' },
-  { id:3, title:'文明守護', emoji:'🛡️', subtitle:'建立星環、抵禦太陽風暴', problem:'外太空偵測到太陽風暴，全隊需要解決危機並維持四大資源。' }
+  { id:3, title:'文明守護', emoji:'🛡️', subtitle:'建立星環、共同攔截隕石與修復星圖', problem:'隕石群正在逼近！完成數學防護工程後，大家要合作攔截隕石並修復星圖。' }
 ];
 export const STAGE_COUNT = STAGES.length;
 export const stageInfo = room => STAGES[Math.max(0,Math.min(STAGE_COUNT-1,(room.stage||1)-1))];
