@@ -103,7 +103,7 @@ function estimateOptions(exact,unit,method,rng){
  }
  const letters=['A','B','C','D'];
  return {answer:letters[options.indexOf(closest)],
-  choices:options.map((value,i)=>({value:letters[i],label:fmt(value)+' '+unit})),estimate:closest};
+  choices:options.map((value,i)=>({value:letters[i],label:fmt(value)+(unit==='km²'?' 平方公里':' 公里')})),estimate:closest};
 }
 export function makeEstimationTask(kind,variant,difficulty='standard',rng=Math.random,variantIndex=0){
  const s=specification(kind,variantIndex,rng);
