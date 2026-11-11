@@ -3,6 +3,7 @@ import { makeVariedTask } from './tasks-v3.js';
 import { makeEventTask } from './event-tasks.js';
 import { STAGES, stageInfo, modeGoalList, modeProgress, lifeIndex, HAZARD_INFO } from './modes-v2.js';
 import { makeReviewQuestions, reviewPublicQuestions, gradeReview } from './review.js';
+import { makeAdventure, techBuildBonus, publicAdventure } from './adventure.js';
 
 export const MAX_PLAYERS = 5;
 export const PI = 3.14;
@@ -30,8 +31,8 @@ export function cleanName(name) {
 }
 
 export function goalForCount(n, durationMinutes = 40) {
-  // 三種課堂時長各自分配 3、5、8 題／人；至少四項才能涵蓋不同工程。
-  const perPlayer = durationMinutes >= 40 ? 8 : durationMinutes >= 25 ? 5 : 3;
+  // V1.5：數學只是四大玩法之一；降低答題數，改由探索、接水管和科技研究共同通關。
+  const perPlayer = durationMinutes >= 40 ? 4 : durationMinutes >= 25 ? 3 : 2;
   return Math.max(4, perPlayer * Math.min(MAX_PLAYERS, Math.max(1, n)));
 }
 
@@ -118,7 +119,7 @@ export function createRoom(code, hostName = '老師', options = {}) {
     hazards: [], eventsWon: 0, tickCount: 0, lastEventVariants: {},
     event: null, eventIndex: 0, lastEventId: null, eventCountdown: 110, startingPlayers: 0,
     requiredBuildings: 4, resources: { oxygen: 20, water: 30, energy: 25, stability: 70 },
-    completed: { forest: 0, orbit: 0, crater: 0, power: 0 }, result: null
+    completed: { forest: 0, orbit: 0, crater: 0, power: 0 }, adventure:makeAdventure(), result: null
   };
 }
 
@@ -142,7 +143,7 @@ export function startRoom(room) {
   if (room.phase !== 'lobby') throw new Error('目前無法開始');
   if (!room.players.length) throw new Error('至少需要 1 位學生才能開始');
   room.phase = 'playing'; room.paused = false;
-  room.stage = 1; room.stageChallengesResolved = 0; room.stageHistory=[];
+  room.stage = 1; room.stageChallengesResolved = 0; room.stageHistory=[];room.adventure=makeAdventure();
   room.startingPlayers = room.players.length;
   room.requiredBuildings = goalForCount(room.startingPlayers, room.durationMinutes);
   room.remainingSeconds = room.durationMinutes * 60;
@@ -152,7 +153,7 @@ export function startRoom(room) {
     player.task = makeTask(player.selectedKind, room.difficulty, Math.random, player.lastVariants[player.selectedKind], player.recentQuestions);
     player.lastVariants[player.selectedKind] = player.task.variant;
   }
-  log(room, 'system', `任務啟動：${room.startingPlayers} 人模式，共三個連續關卡，最終累計需完成 ${room.requiredBuildings} 項工程。`);
+  log(room, 'system', `任務啟動：${room.startingPlayers} 人模式，數學建造、地圖探索、管線修復、科技研究與團隊決策並行；最終至少 ${room.requiredBuildings} 項工程。`);
 }
 
 export function log(room, type, message, extra = {}) {
@@ -235,6 +236,7 @@ export function buildResult(room, player, submitted) {
     power: { energy: 14, water: -1, stability: 2 }
   };
   adjustResources(room.resources, changes[task.kind]);
+  adjustResources(room.resources,techBuildBonus(room,task.kind));
   // 異常會持續削減資源，直到對應工程被完成；即使事件倒數已結束仍有效。
   for (const hazard of room.hazards) {
     const effect = HAZARD_INFO[hazard.id];
@@ -371,7 +373,7 @@ export function resetRoom(room) {
   room.phase = 'lobby'; room.paused = false; room.remainingSeconds = room.durationMinutes * 60;
   room.event = null; room.eventIndex = 0; room.lastEventId = null; room.eventCountdown = 110;
   room.hazards = []; room.eventsWon = 0; room.tickCount = 0; room.lastEventVariants = {}; room.stage=1; room.stageHistory=[];room.stageChallengesResolved=0;
-  room.structures = []; room.completed = { forest: 0, orbit: 0, crater: 0, power: 0 };
+  room.structures = []; room.completed = { forest: 0, orbit: 0, crater: 0, power: 0 }; room.adventure=makeAdventure();
   room.resources = { oxygen: 20, water: 30, energy: 25, stability: 70 };
   room.result = null; room.startingPlayers = 0; room.requiredBuildings = goalForCount(room.players.length, room.durationMinutes);
   room.history = [];
@@ -431,6 +433,7 @@ export function publicState(room, token) {
     players: students, maxPlayers: MAX_PLAYERS, startingPlayers: room.startingPlayers,
     requiredBuildings: room.requiredBuildings, resources: room.resources,
     completed: room.completed, structures: room.structures, buildingsTotal: total,
+    adventure:publicAdventure(room),
     allKindsComplete: diversified, progress: modeProgress(room), lifeIndex: lifeIndex(room),
     event, eventCountdown: room.eventCountdown, result: room.result,
     history: room.history.slice(0, isHost ? 100 : 14),

@@ -7,6 +7,7 @@ import {
   makeTask, startRoom, buildResult, triggerEvent, solveEvent, log,
   resetRoom, finishRoom, tick, checkWin, submitReview
 } from './game.js';
+import { exploreSector, chooseDecision, rotatePipe, purchaseTech } from './adventure.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.resolve(__dirname, '../client');
@@ -259,6 +260,18 @@ async function api(req, res, pathname, searchParams) {
       requireStudent(session);
       try { feedback = solveEvent(room, session.player, body); }
       catch (e) { throw new HttpError(e.message); }
+    } else if (['explore','decision','pipeRotate','research'].includes(action)) {
+      requireStudent(session);
+      try {
+        const player = session.player;
+        if (action==='explore') feedback=exploreSector(room,player,body.index);
+        if (action==='decision') feedback=chooseDecision(room,player,body.choice);
+        if (action==='pipeRotate') feedback=rotatePipe(room,player,body.index);
+        if (action==='research') feedback=purchaseTech(room,player,body.techId);
+        log(room,action==='explore'?'explore':action==='decision'?'decision':action==='pipeRotate'?'pipe':'research',
+          feedback.message || '探險隊採取行動', {player:player.name});
+        checkWin(room);
+      } catch (e) { throw new HttpError(e.message); }
     } else if (action === 'submitReview') {
       requireStudent(session);
       try { feedback = submitReview(room, session.player, body); }

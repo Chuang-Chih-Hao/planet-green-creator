@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   addPlayer,createRoom,makeTask,buildResult,goalForCount,triggerEvent,solveEvent,failEvent,
-  publicState,tick,startRoom,FORMULAS,resetRoom,finishRoom,submitReview
+  publicState,tick,startRoom,FORMULAS,resetRoom,finishRoom,submitReview,checkWin
 } from '../server/game.js';
 import { TASK_VARIANTS,TASK_SCENARIOS,CONCEPT_VARIANTS } from '../server/tasks-v3.js';
 import { EVENT_VARIANTS } from '../server/event-tasks.js';
 import { modeGoalList } from '../server/modes-v2.js';
+import { exploreSector,chooseDecision,rotatePipe,purchaseTech,isPipelineSolved,explorationTarget,makePipeline } from '../server/adventure.js';
 
 function roomWith(n=1){
  const room=createRoom('TEST99');
@@ -17,9 +18,36 @@ function correctTask(room,p,kind){
  p.selectedKind=kind;p.task=makeTask(kind,'advanced',Math.random,null,p.recentQuestions);p.lastAnswerAt=0;
  return buildResult(room,p,{taskId:p.task.id,formula:p.task.formula,answer:p.task.answer,unit:p.task.unit});
 }
+
+function scanTo(room,p,target) {
+  for(let i=room.adventure.discovered;i<target;i++){
+    room.adventure.nextScanAt=0;
+    const idx=room.adventure.sectors.find(x=>!x.revealed).index;
+    exploreSector(room,p,idx);
+    if(room.adventure.decision)chooseDecision(room,p,room.adventure.decision.options[0].id);
+    checkWin(room);
+  }
+}
+const dirs=['N','E','S','W'],op={N:'S',E:'W',S:'N',W:'E'};
+const linkDir=(a,b)=>b-a===1?'E':b-a===-1?'W':b-a===3?'S':'N';
+const ports=cell=>(cell.kind==='straight'?['N','S']:['N','E']).map(dir=>dirs[(dirs.indexOf(dir)+cell.rotation)%4]);
+function repairPipe(room,p){
+  const before=room.adventure.pipeRepairs;
+  const path=[...room.adventure.pipe.solution];
+  for(let j=0;j<path.length;j++){
+    const i=path[j],needs=[j===0?'W':linkDir(i,path[j-1]),j===path.length-1?'E':linkDir(i,path[j+1])];
+    for(let turn=0;turn<4&&!needs.every(d=>ports(room.adventure.pipe.cells[i]).includes(d));turn++){
+      room.adventure.nextPipeAt=0;
+      rotatePipe(room,p,i);
+      if(room.adventure.pipeRepairs>before){checkWin(room);return;}
+    }
+  }
+  assert.equal(room.adventure.pipeRepairs,before+1,'旋轉水管必須可完成');
+  checkWin(room);
+}
 test('目標隨 1 到 5 人、時長調整，不需滿五人',()=>{
- assert.equal(goalForCount(1,40),8);assert.equal(goalForCount(4,40),32);
- assert.equal(goalForCount(5,40),40);assert.equal(goalForCount(4,25),20);assert.equal(goalForCount(4,15),12);
+ assert.equal(goalForCount(1,40),4);assert.equal(goalForCount(4,40),16);
+ assert.equal(goalForCount(5,40),20);assert.equal(goalForCount(4,25),12);assert.equal(goalForCount(4,15),8);
 });
 test('四大工程維持十種計算題型，另加觀念題及是非題',()=>{
  for(const kind of ['forest','orbit','crater','power']){
@@ -95,33 +123,66 @@ test('公式、計算錯誤仍有具體診斷且不誤建造',()=>{
  assert.equal(wrong2.reason,'value');assert.match(wrong2.message,/四分之一|半徑|直徑/);
  assert.equal(room.structures.length,0);
 });
-test('三關順序固定：森林能源解鎖第二關，修復乾旱解鎖第三關',()=>{
- const {room,players:[p]}=roomWith();
- room.durationMinutes=15;startRoom(room);
+test('三關闖關需探索、科技與接水管，不是只答題',()=>{
+ const {room,players:[p]}=roomWith();room.durationMinutes=15;startRoom(room);
  assert.equal(room.stage,1);assert.equal(publicState(room,room.hostToken).progress,0);
- correctTask(room,p,'forest');assert.equal(room.stage,1);
- correctTask(room,p,'power');assert.equal(room.stage,2);
- assert.equal(room.resources.water,18,'第二關乾旱立即扣水');
- assert.match(publicState(room,p.token).stageInfo.problem,/水資源|乾旱/);
- correctTask(room,p,'crater');assert.equal(room.stage,3);
- assert.equal(room.event.id,'flare','第三關強制觸發防護危機');
- assert.equal(room.stageHistory.length,2);
-});
-test('第三關需要解決危機、補足資源與四大工程，通過後進入回顧',()=>{
- const {room,players:[p]}=roomWith();room.durationMinutes=15;room.eventsEnabled=false;startRoom(room);
  correctTask(room,p,'forest');correctTask(room,p,'power');
+ assert.equal(room.stage,1,'光解數學題不能進第二關');
+ scanTo(room,p,explorationTarget(room,1));
+ assert.equal(room.stage,2);
+ scanTo(room,p,explorationTarget(room,2));
+ purchaseTech(room,p,'battery');checkWin(room);
  correctTask(room,p,'crater');
- assert.equal(room.stage,3);assert.ok(room.event,'即使自動事件關閉，也應有劇情危機');
+ assert.equal(room.stage,2,'沒有水管任務不可以通關');
+ repairPipe(room,p);
+ assert.equal(room.stage,3);assert.equal(room.event.id,'flare');
+ assert.ok(room.adventure.decisionsResolved>=1);
+});
+test('第三關需探索與合作活動，完成後進入課後回顧',()=>{
+ const {room,players:[p]}=roomWith();room.durationMinutes=15;room.eventsEnabled=false;startRoom(room);
+ correctTask(room,p,'forest');correctTask(room,p,'power');scanTo(room,p,2);
+ assert.equal(room.stage,2);
+ scanTo(room,p,4);purchaseTech(room,p,'battery');correctTask(room,p,'crater');repairPipe(room,p);
+ assert.equal(room.stage,3);
  const e=room.event.task;p.lastAnswerAt=0;
  const missing=solveEvent(room,p,{formula:e.formula,answer:e.answer,unit:''});
- assert.equal(missing.reason,'missingUnit');assert.equal(room.event.attempts,0);
+ assert.equal(missing.reason,'missingUnit');
  const solved=solveEvent(room,p,{formula:e.formula,answer:e.answer,unit:e.unit});
- assert.equal(solved.correct,true);assert.equal(room.stageChallengesResolved,1);
- for(let i=0;i<20&&room.phase==='playing';i++)correctTask(room,p,['orbit','forest','crater','power'][i%4]);
- assert.equal(room.phase,'finished','應能完成第三關');
- assert.equal(room.result.win,true);
+ assert.equal(solved.correct,true);
+ scanTo(room,p,explorationTarget(room,3));
+ purchaseTech(room,p,'nursery');checkWin(room);
+ repairPipe(room,p);
+ assert.ok(room.adventure.pipeRepairs>=2);
+ assert.ok(room.adventure.upgrades.length>=2);
+ for(let i=0;i<28&&room.phase==='playing';i++)correctTask(room,p,['orbit','forest','crater','power'][i%4]);
+ assert.equal(room.phase,'finished');assert.equal(room.result.win,true);
  assert.equal(publicState(room,p.token).progress,100);
  assert.equal(publicState(room,p.token).ownReview.questions.length,3);
+});
+test('探索地圖保密、科技花材料且能真正改善星球',()=>{
+ const {room,players:[p]}=roomWith();startRoom(room);
+ const visible=publicState(room,p.token).adventure;
+ assert.equal(visible.sectors.length,16);
+ assert.ok(visible.sectors.every(x=>!x.revealed&&x.title==='未探索區域'&&x.type===undefined));
+ scanTo(room,p,4);
+ const a=publicState(room,p.token).adventure;
+ assert.equal(a.discovered,4);assert.ok(a.materials>=4);
+ const before=room.resources.energy;
+ purchaseTech(room,p,'battery');
+ assert.ok(room.resources.energy>=before+6);
+ assert.ok(room.adventure.upgrades.includes('battery'));
+ assert.throws(()=>purchaseTech(room,p,'battery'),/已經研究/);
+});
+test('接水管拼圖有可行解，完成後補水並產生下一組',()=>{
+ const {room,players:[p]}=roomWith();room.phase='playing';room.stage=2;
+ const before=room.resources.water;
+ const initial=publicState(room,p.token).adventure.pipe;
+ assert.equal(initial.cells.length,9);
+ assert.equal(initial.solution,undefined,'不可洩漏管線解法');
+ repairPipe(room,p);
+ assert.equal(room.adventure.pipeRepairs,1);
+ assert.equal(room.resources.water,before+9);
+ assert.equal(room.adventure.pipe.round,2);
 });
 test('各階段即使事件失敗，也能由對應工程修復',()=>{
  const {room,players:[p]}=roomWith();room.phase='playing';room.stage=3;

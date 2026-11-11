@@ -1,13 +1,13 @@
 {
   "name": "planet-green-creator",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "type": "module",
   "description": "小六圓周長與圓面積多人合作星球養成遊戲",
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "test": "node --check client/app.js && node --check client/scratchpad.js && node --check server/game.js && node --check server/review.js && node --check server/tasks-v2.js && node --check server/tasks-v3.js && node --check server/event-tasks.js && node --check server/index.js && node --check server/modes-v2.js && NODE_ENV=test node --test tests/*.test.js"
+    "test": "node --check client/app.js && node --check client/scratchpad.js && node --check server/adventure.js && node --check server/game.js && node --check server/review.js && node --check server/tasks-v2.js && node --check server/tasks-v3.js && node --check server/event-tasks.js && node --check server/index.js && node --check server/modes-v2.js && NODE_ENV=test node --test tests/*.test.js"
   },
   "engines": { "node": ">=20" },
   "license": "MIT"

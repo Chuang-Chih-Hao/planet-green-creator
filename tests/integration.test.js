@@ -30,7 +30,7 @@ test('教師一房可帶四人或五人、第五人後無法加入更多；不�
  const began=await post('action',{token:created.token,action:'start'});
  assert.equal(began.state.startingPlayers,4);
  assert.equal(began.state.stage,1);
- assert.equal(began.state.requiredBuildings,32);
+ assert.equal(began.state.requiredBuildings,16);
  const fifth=await post('join',{name:'補位',code:created.state.code});
  assert.equal(fifth.status,200);
  assert.equal((await post('join',{name:'第六位',code:created.state.code})).status,400);
@@ -64,24 +64,31 @@ test('漏選單位會提供專門提醒，不算答錯；教師可以選擇顯�
  assert.equal(done.feedback.correct,true);
  assert.equal(done.state.players[0].answered,1);
 });
-test('單人也能連續通過前兩關，第三關有劇情危機；事件答案只有老師能揭露',async()=>{
- const h=await post('create',{name:'闖關教師'}),p=await post('join',{name:'玩家',code:h.state.code});
+test('數學建造不能單獨通關：探索、管線與研究 API 都是可操作的多人機制',async()=>{
+ const h=await post('create',{name:'冒險教師'}),p=await post('join',{name:'玩家',code:h.state.code});
  await post('action',{token:h.token,action:'settings',durationMinutes:15,eventsEnabled:false});
  await post('action',{token:h.token,action:'start'});
  let result=await doTask(h.token,p.token,'forest');assert.equal(result.state.stage,1);
- result=await doTask(h.token,p.token,'power');assert.equal(result.state.stage,2);
- result=await doTask(h.token,p.token,'crater');
- assert.equal(result.state.stage,3);
- assert.equal(result.state.event.id,'flare');
- assert.equal(result.state.event.answer,undefined);
- const no=await post('action',{token:p.token,action:'revealAnswer',scope:'event'});
- assert.equal(no.status,403);
+ result=await doTask(h.token,p.token,'power');
+ assert.equal(result.state.stage,1,'只答題不應自動進第二關');
+ const before=await state(p.token);assert.equal(before.adventure.discovered,0);
+ assert.ok(before.adventure.sectors.every(x=>x.title==='未探索區域'&&x.type===undefined));
+ const forbidden=await post('action',{token:h.token,action:'explore',index:0});
+ assert.equal(forbidden.status,403,'老師不可代替學生操作冒險');
+ const scan=await post('action',{token:p.token,action:'explore',index:0});
+ assert.equal(scan.status,200);assert.equal(scan.state.adventure.discovered,1);
+ const duplicate=await post('action',{token:p.token,action:'explore',index:0});
+ assert.equal(duplicate.status,400,'不可連續掃描');
+ const locked=await post('action',{token:p.token,action:'pipeRotate',index:0});
+ assert.equal(locked.status,400,'第二關前不可接管線');
+ const boss=await post('action',{token:h.token,action:'event',eventId:'flare'});
+ assert.equal(boss.status,200);assert.equal(boss.state.event.answer,undefined);
+ assert.equal((await post('action',{token:p.token,action:'revealAnswer',scope:'event'})).status,403);
  const answer=await post('action',{token:h.token,action:'revealAnswer',scope:'event'});
  assert.equal(answer.status,200);
- await new Promise(resolve=>setTimeout(resolve,480)); // 事件答題與上一項建造之間保留防連點間隔。
- const eventDone=await post('action',{token:p.token,action:'eventAnswer',formula:answer.feedback.formula,answer:answer.feedback.answer,unit:answer.feedback.unit});
- assert.equal(eventDone.feedback.correct,true);
- assert.equal(eventDone.state.stageChallengesResolved,1);
+ await new Promise(resolve=>setTimeout(resolve,480));
+ const solved=await post('action',{token:p.token,action:'eventAnswer',formula:answer.feedback.formula,answer:answer.feedback.answer,unit:answer.feedback.unit});
+ assert.equal(solved.feedback.correct,true);
 });
 test('結束後可完成三道數學複習，教師收到成績和文字回饋並可重開',async()=>{
  const h=await post('create',{name:'課後老師'}),p=await post('join',{name:'學生',code:h.state.code});

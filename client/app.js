@@ -33,6 +33,7 @@ const drafts = new Map();
 const teacherReveals = new Map(); // 教師按按鈕才載入，永不放進 SSE 共用狀態。
 let currentTaskId = null;
 let currentEventId = null;
+let workTab='build';
 const reviewDraft = {};
 const scratchpad = createScratchpad(() => state);
 
@@ -101,6 +102,9 @@ function updateClocks() {
   for (const node of document.querySelectorAll('[data-clock]')) node.textContent = formatTime(state.remainingSeconds);
   for (const node of document.querySelectorAll('[data-event-seconds]')) node.textContent = `${state.event?.secondsLeft ?? 0}s`;
   for (const node of document.querySelectorAll('[data-event-countdown]')) node.textContent = formatTime(state.eventCountdown);
+  for (const node of document.querySelectorAll('[data-adventure-timer]')) { const due=(node.dataset.adventureTimer==='scan'?state.adventure?.nextScanAt:state.adventure?.nextPipeAt)||0;const sec=Math.max(0,Math.ceil((due-Date.now())/1000));node.textContent=sec?sec+' 秒':'準備就緒'; }
+  for (const node of document.querySelectorAll('[data-explore-index]')) node.disabled=state.paused||state.phase!=='playing'||Date.now()<(state.adventure?.nextScanAt||0)||Boolean(state.adventure?.decision)||Boolean(state.adventure?.sectors?.[Number(node.dataset.exploreIndex)]?.revealed);
+  for (const node of document.querySelectorAll('[data-pipe-index]')) node.disabled=state.paused||state.phase!=='playing'||Date.now()<(state.adventure?.nextPipeAt||0);
 }
 function updateLive() {
   for (const node of document.querySelectorAll('[data-connection]')) {
@@ -165,12 +169,14 @@ async function action(name, extra = {}) {
     if (name === 'eventAnswer') eventFeedback = response.feedback;
     if (name === 'selectTask' || name === 'reset' || name === 'start') {
       feedback = null; eventFeedback = null; hintText = '';
-      if (name === 'reset') teacherReveals.clear();
+      if (name === 'reset') {teacherReveals.clear();workTab='build';}
     }
     applyState(response.state);
     if (name === 'answer' && response.feedback?.correct) toast('✨ 建造完成，星球又成長了！');
     else if (name === 'eventAnswer' && response.feedback?.correct) toast('🎉 宇宙事件解除！全隊獲得獎勵');
     else if (name === 'answer' && response.feedback && !response.feedback.correct) toast('答案未通過，可再試一次', true);
+    else if(['explore','decision','research','pipeRotate'].includes(name)&&response.feedback?.solved)toast('💧 水循環管線接通成功！');
+    else if(['explore','decision','research'].includes(name)&&response.feedback?.message)toast(response.feedback.message);
   } catch (error) { toast(error.message, true); }
   finally { loading = false; }
 }
@@ -241,7 +247,7 @@ function playersPanel(s) {
   return `<section class="side-card card"><div class="section-head"><h2>👨‍🚀 探險隊成員</h2><span class="tag blue">${s.players.length} / ${s.maxPlayers} 人</span></div><div class="player-list">${s.players.length ? s.players.map(p => `<div class="player-row"><span class="avatar ${p.id === s.myId ? 'me' : ''}">${escapeHTML(p.name.slice(0, 1))}</span><div class="player-info"><div class="player-name"><span class="online-dot ${p.connected ? '' : 'off'}" style="width:6px;height:6px;flex:none"></span>${escapeHTML(p.name)}${p.id === s.myId ? ' <small style="color:#58e7ad">(你)</small>' : ''}</div><div class="player-sub">${KINDS[p.selectedKind]?.emoji ?? '🚀'} ${KINDS[p.selectedKind]?.name ?? '探索中'} · ${p.correct} 題正確</div></div><span class="rank">★ ${p.stars}</span>${s.role === 'host' && (s.phase === 'lobby' || (s.phase === 'playing' && !p.connected)) ? `<button class="mini-btn" data-action="removePlayer" data-player-id="${p.id}" title="移除學生">×</button>` : ''}</div>`).join('') : '<div class="empty-state">等待探險家加入...<br/>可分享右上方房間代碼。</div>'}</div></section>`;
 }
 function historyPanel(s) {
-  const symbol = { build: '🌱', event: '☄️', success: '✨', warning: '⚠️', wrong: '✏️', join: '🚀', victory: '🏆', system: '📡', stage:'🌍', review:'📝' };
+  const symbol = { build: '🌱', event: '☄️', success: '✨', warning: '⚠️', wrong: '✏️', join: '🚀', victory: '🏆', system: '📡', stage:'🌍', review:'📝',explore:'🧭',pipe:'💧',decision:'🤝',research:'🔬' };
   return `<section class="side-card card"><div class="section-head"><h2>📡 宇宙任務日誌</h2></div><div class="log-list">${s.history.length ? s.history.slice(0, 7).map(h => `<div class="log-entry"><span class="log-icon">${symbol[h.type] || '📌'}</span><div><strong>${escapeHTML(h.message)}</strong><div class="log-time">${new Date(h.at).toLocaleTimeString('zh-TW', {hour: '2-digit', minute: '2-digit'})}</div></div></div>`).join('') : '<div class="empty-state">還沒有冒險紀錄。<br/>完成建造後會顯示於此。</div>'}</div></section>`;
 }
 
@@ -262,7 +268,7 @@ function planetPanel(s) {
       <div class="scene-footer"><div style="width:${s.progress}%"></div></div>
     </div>
     <div class="mini-stats"><div class="mini-stat card"><div class="stat-number">${s.buildingsTotal}</div><div class="stat-label">已建設設施</div></div><div class="mini-stat card"><div class="stat-number">${s.players.length}</div><div class="stat-label">探險家人數</div></div><div class="mini-stat card"><div class="stat-number">${Object.values(s.completed).filter(Boolean).length}<span style="color:#819ab6;font-size:15px">/4</span></div><div class="stat-label">工程種類</div></div></div>
-    <div class="card scene-caption"><div><strong style="font-size:13px">🌌 ${s.phase === 'lobby' ? '航行準備中' : s.phase === 'finished' ? '任務結算' : s.event ? '宇宙危機處理中' : '正在建設星球'}</strong><p>${s.phase === 'lobby' ? '邀請學生登陸，再由房主開始任務。' : s.phase === 'finished' ? '可以檢查解題成果，並開啟新一局。' : s.event ? '所有學生都可以嘗試事件解答，正確一人即全隊成功。' : '不同學生可以同時進行森林、星環、地形修復、能源建設任務。'}</p></div><div class="badge-big">${s.event ? s.event.emoji : '🪐'}</div></div>
+    <div class="card scene-caption"><div><strong style="font-size:13px">🌌 ${s.phase === 'lobby' ? '航行準備中' : s.phase === 'finished' ? '任務結算' : s.event ? '宇宙危機處理中' : '正在建設星球'}</strong><p>${s.phase === 'lobby' ? '邀請學生登陸，再由房主開始任務。' : s.phase === 'finished' ? '可以檢查解題成果，並開啟新一局。' : s.event ? '所有學生都可以嘗試事件解答，正確一人即全隊成功。' : '不同學生可以同時分工數學建造、地圖探索、管線修復與科技研究。'}</p></div><div class="badge-big">${s.event ? s.event.emoji : '🪐'}</div></div>
   </section>`;
 }
 
@@ -325,37 +331,63 @@ function teacherReviewPanel(s) {
       +(p.reviewSubmitted?'<p>掌握程度：'+(p.reviewConfidence==='understand'?'大致會了':p.reviewConfidence==='review'?'需要再練習':'部分不確定')+'</p><p>反思：'+escapeHTML(p.reviewReflection||'未填寫')+'</p>'+reviewDetailHTML(p):'')
       +'</article>').join('')+'</div></section>';
 }
+function workNavigation() {
+ const tabs=[['build','📐','數學建造'],['explore','🧭','探索地圖'],['pipes','💧','接水管'],['tech','🔬','科技基地']];
+ return '<nav class="work-tabs" aria-label="選擇冒險玩法">'+tabs.map(([id,emoji,label])=>'<button type="button" class="work-tab '+(workTab===id?'selected':'')+'" data-action="workTab" data-work-tab="'+id+'">'+emoji+' <span>'+label+'</span></button>').join('')+'</nav>';
+}
+function adventureSummary(s){
+ const a=s.adventure;if(!a)return '';
+ return '<section class="card adventure-overview"><div class="section-head"><h2>🧭 探險隊共同進度</h2><span class="tag blue">第 '+s.stage+' 關</span></div><div class="adventure-stats"><span>🧭 探索 '+a.discovered+'/16</span><span>💧 管線 '+a.pipeRepairs+' 次</span><span>🧪 材料 '+a.materials+'</span><span>🔬 科技 '+a.upgrades.length+'/4</span></div>'+(a.lastAction?'<p class="adventure-latest">✨ '+escapeHTML(a.lastAction)+'</p>':'')+'</section>';
+}
+function explorePanel(s){
+ const a=s.adventure;if(!a)return '';
+ const decision=a.decision?'<div class="planet-decision"><h3>'+escapeHTML(a.decision.title)+'</h3><p>'+escapeHTML(a.decision.story)+'</p><div class="decision-options">'+a.decision.options.map(opt=>'<button type="button" data-action="decision" data-choice="'+opt.id+'" '+(s.paused?'disabled':'')+'><strong>'+escapeHTML(opt.label)+'</strong><small>'+escapeHTML(opt.description)+'</small></button>').join('')+'</div><p class="footnote">由一位學生代表全隊作決定，資源會即時改變。</p></div>':'';
+ const cells=a.sectors.map(sec=>'<button type="button" class="sector-tile '+(sec.revealed?'revealed':'fog')+'" data-action="explore" data-explore-index="'+sec.index+'" '+(sec.revealed||s.paused||a.decision||Date.now()<a.nextScanAt?'disabled':'')+' aria-label="第'+(sec.index+1)+'區：'+escapeHTML(sec.title)+'"><span>'+sec.icon+'</span><strong>'+escapeHTML(sec.title)+'</strong>'+(sec.by?'<small>'+escapeHTML(sec.by)+'</small>':'')+'</button>').join('');
+ return '<section class="card adventure-card"><div class="section-head"><h2>🧭 探索未知大陸</h2><span class="tag blue">'+a.discovered+'/16 格</span></div><p>點擊未探索的地圖區域，尋找水脈、礦物、植物與能源。每次需要 2 能源，全隊共用探測器。</p><p class="footnote">探測器冷卻：<strong data-adventure-timer="scan"></strong></p>'+decision+'<div class="sector-grid">'+cells+'</div>'+(a.lastDiscovery?'<div class="explore-discovery"><strong>'+a.lastDiscovery.icon+' '+escapeHTML(a.lastDiscovery.title)+'</strong><p>'+escapeHTML(a.lastDiscovery.description)+'</p><small>'+escapeHTML(a.lastDiscovery.by)+' 獲得材料 +'+a.lastDiscovery.material+'</small></div>':'')+'</section>';
+}
+function pipePanel(s){
+ const a=s.adventure;if(!a)return '';
+ if(s.stage<2)return '<section class="card adventure-card"><h2>🔒 管線修復尚未解鎖</h2><p>完成第一關後，就可以開始旋轉水管的小遊戲。</p></section>';
+ const tiles=a.pipe.cells.map((c,i)=>'<button type="button" class="pipe-tile '+(c.flowing?'flowing':'')+'" data-action="pipeRotate" data-pipe-index="'+i+'" '+(s.paused||Date.now()<a.nextPipeAt?'disabled':'')+' aria-label="旋轉第'+(Math.floor(i/3)+1)+'列第'+(i%3+1)+'欄水管"><span class="pipe-center"></span>'+c.ports.map(dir=>'<span class="pipe-arm pipe-'+dir.toLowerCase()+'"></span>').join('')+'</button>').join('');
+ return '<section class="card adventure-card"><div class="section-head"><h2>💧 合作接通水循環</h2><span class="tag blue">修復 '+a.pipeRepairs+' 次</span></div><p>點水管方格可以順時針旋轉 90 度。讓水從<strong>左上角的左側入口</strong>一路接到<strong>右下角的右側出口</strong>，所有學生能看到同一張水管圖。</p><div class="pipeline-shell"><span class="pipe-endpoint start">💧 起點 →</span><div class="pipe-grid">'+tiles+'</div><span class="pipe-endpoint end">→ 🌿 終點</span></div><p class="footnote">接通需 3 能源，獎勵水資源 +9、穩定度 +4。再次修復：<strong data-adventure-timer="pipe"></strong>；亮藍色代表已流到的位置。</p></section>';
+}
+function techPanel(s){
+ const a=s.adventure;if(!a)return '';
+ return '<section class="card adventure-card"><div class="section-head"><h2>🔬 合作研究基地</h2><span class="tag blue">材料 '+a.materials+'</span></div><p>探索取得材料，團隊討論要先研究哪一種升級。升級後會立即增加資源，並持續強化對應工程。</p><div class="research-list">'+a.techs.map(t=>'<article class="research-item '+(t.owned?'owned':'')+'"><div class="research-icon">'+t.icon+'</div><div class="research-detail"><strong>'+escapeHTML(t.title)+'</strong><small>'+escapeHTML(t.description)+'</small></div><button type="button" class="mini-btn" data-action="research" data-tech-id="'+t.id+'" '+(t.owned||s.paused||a.materials<t.cost?'disabled':'')+'>'+(t.owned?'✓ 已升級':'🧪 '+t.cost+' 材料')+'</button></article>').join('')+'</div></section>';
+}
 function studentPanel(s) {
   if (s.phase === 'lobby') return `<section class="card waiting"><div class="big">🚀</div><h2>準備就緒，等待房主</h2><p>你已成功加入 <strong>${escapeHTML(s.code)}</strong> 房間！<br/>老師開始後，可以選擇森林、星環、地形修復或能源工程。<br/>不同人數會採不同的完成目標。</p></section>`;
   if (s.phase === 'finished') return reviewPanel(s);
   const t = s.ownTask;
   if (!t) return `<div class="card waiting">請稍候，正在產生新任務...</div>`;
   const draft = drafts.get(`task:${t.id}`) || {};
-  return `<section class="card role-intro"><span class="icon">👨‍🚀</span><div><h2>我的建造工作站</h2><p>四種工程可以自由切換，不受玩家人數限制。</p></div><span class="tag">+ 建造獎勵</span></section>
-    ${eventPanel(s)}
-    ${!s.event && eventFeedback?.correct ? `<section class="card" style="padding:17px 19px"><div class="section-head"><h2>✅ 上次事件的解題紀錄</h2></div>${feedbackHTML(eventFeedback, true)}</section>` : ''}
-    <section class="card task-card"><div class="section-head"><h2>📐 數學建造任務</h2><span class="tag blue">π = 3.14</span></div><div class="task-tabs">${Object.entries(KINDS).map(([k, inf]) => `<button class="task-tab ${t.kind === k ? 'active' : ''}" data-action="selectTask" data-kind="${k}" ${s.paused ? 'disabled' : ''}><span class="emoji">${inf.emoji}</span>${inf.name}</button>`).join('')}</div>
+  const buildingMarkup=`<section class="card task-card"><div class="section-head"><h2>📐 數學建造任務</h2><span class="tag blue">π = 3.14</span></div><div class="task-tabs">${Object.entries(KINDS).map(([k, inf]) => `<button class="task-tab ${t.kind === k ? 'active' : ''}" data-action="selectTask" data-kind="${k}" ${s.paused ? 'disabled' : ''}><span class="emoji">${inf.emoji}</span>${inf.name}</button>`).join('')}</div>
     <div class="question-box"><div class="question-title">${KINDS[t.kind]?.emoji} ${escapeHTML(t.title)}</div><p class="question-text">${escapeHTML(t.question)}</p><div class="question-context">${escapeHTML(t.context)}</div></div>
     <div class="math-caption">✦ 你需要同時選對公式、算對數字及單位，才會完成建造。</div>
     <form id="task-answer-form" data-draft-key="task:${t.id}">${t.type==='choice'||t.type==='trueFalse'?quizHTML(t,draft):formulaHTML('task',draft.formula)+answerFields(draft)}<div class="help-row"><span>難度：${s.difficulty === 'basic' ? '基礎' : s.difficulty === 'advanced' ? '挑戰' : '標準'}</span><div class="task-helpers"><button class="mini-btn" type="button" data-action="hint">💡 公式提示</button><button class="mini-btn" type="button" data-action="scratch" data-scratch="task">✏️ 計算紙</button></div></div>${hintText ? `<div class="feedback info"><strong>💡 建造提示</strong>${escapeHTML(hintText)}</div>` : ''}<div class="task-actions"><button class="btn full" type="submit" ${s.paused ? 'disabled' : ''}>✨ 確認建造</button></div></form>
     ${feedbackHTML(feedback)}</section>`;
+  return `<section class="card role-intro"><span class="icon">👨‍🚀</span><div><h2>星球探險工作站</h2><p>可以分工做數學建造、探索、接水管、研究科技，不需要一直算題。</p></div><span class="tag">合作冒險</span></section>`
+    +adventureSummary(s)+eventPanel(s)
+    +(!s.event&&eventFeedback?.correct?`<section class="card" style="padding:15px">${feedbackHTML(eventFeedback,true)}</section>`:'')
+    +workNavigation()
+    +(workTab==='build'?buildingMarkup:workTab==='explore'?explorePanel(s):workTab==='pipes'?pipePanel(s):techPanel(s));
 }
 function teacherSettingsPanel(s) {
   return `<section class="card host-card"><div class="section-head"><h2>🎛️ 教師控制台</h2><span class="tag">房主專屬</span></div><div class="config-grid"><div class="field"><label>題目難度</label><select class="select-input" data-setting="difficulty"><option value="basic" ${s.difficulty === 'basic' ? 'selected' : ''}>基礎</option><option value="standard" ${s.difficulty === 'standard' ? 'selected' : ''}>標準</option><option value="advanced" ${s.difficulty === 'advanced' ? 'selected' : ''}>挑戰</option></select></div><div class="field"><label>每局時間</label><select class="select-input" data-setting="durationMinutes" ${s.phase !== 'lobby' ? 'disabled' : ''}>${[15, 25, 40].map(x => `<option value="${x}" ${s.durationMinutes === x ? 'selected' : ''}>${x} 分鐘</option>`).join('')}</select></div></div><div class="stage-setting-note">🎯 關卡固定依序進行：🌱 荒土甦醒 → 💧 水土復育 → 🛡️ 文明守護。學生解決目前危機並達成目標後，自動進入下一關。</div><label class="toggle-row"><input type="checkbox" data-setting="eventsEnabled" ${s.eventsEnabled ? 'checked' : ''}/>啟用自動隨機事件（每約 2 分鐘）</label>
     <div class="action-grid">${s.phase === 'lobby' ? `<button class="btn" data-action="start" ${s.players.length < 1 ? 'disabled' : ''}>▶ 開始任務</button>` : s.phase === 'playing' ? `<button class="btn secondary" data-action="pause">${s.paused ? '▶ 恢復' : '⏸ 暫停'}</button>` : `<button class="btn" data-action="reset">↺ 開啟新局</button>`}${s.phase === 'playing' ? '<button class="btn warn" data-action="finish">⏹ 結束本局</button>' : `<button class="btn secondary" data-action="copy">📋 複製房號</button>`}</div>
     <div class="divider"></div><div class="section-head"><h2>☄️ 宇宙事件演示</h2><span class="tag blue">手動觸發</span></div><div class="event-grid">${Object.entries(EVENT_NAMES).map(([key, name]) => `<button class="event-button" data-action="event" data-event-id="${key}" ${s.phase !== 'playing' || s.paused || s.event ? 'disabled' : ''}>${name}</button>`).join('')}</div>${s.event ? `<button style="margin-top:11px" class="btn secondary slim full" data-action="skipEvent">⏭ 略過事件（保留初始衝擊）</button>` : ''}
-    <div class="host-notice" style="margin-top:14px">💡 <strong>小組平衡：</strong>本局 ${s.startingPlayers || s.players.length || 1} 人，最終累計 <strong>${s.requiredBuildings}</strong> 項工程。學生須依序完成三關，並應對水循環與太陽風暴問題。事件發生時就會影響星球；失敗後需完成對應工程清除異常。</div></section>`;
+    <div class="host-notice" style="margin-top:14px">💡 <strong>小組平衡：</strong>本局 ${s.startingPlayers || s.players.length || 1} 人，最終累計 <strong>${s.requiredBuildings}</strong> 項工程，並完成探索、管線修復與研究。學生須依序完成三關，並應對水循環與太陽風暴問題。事件發生時就會影響星球；失敗後需完成對應工程清除異常。</div></section>`;
 }
 function teacherReport(s) {
   return `<section class="card host-card"><div class="section-head"><h2>📊 學生作答統計</h2><button class="mini-btn" data-action="export">⬇ CSV</button></div><table class="class-table"><thead><tr><th>學生</th><th class="num">答對 / 作答</th><th class="num">提示</th><th class="num">錯誤</th></tr></thead><tbody>${s.players.map(p => `<tr><td>${escapeHTML(p.name)}</td><td class="num">${p.correct} / ${p.answered}</td><td class="num">${p.hints ?? 0}</td><td class="num">${Object.values(p.mistakes || {}).reduce((a, b) => a + b, 0)}</td></tr>`).join('') || '<tr><td colspan="4">尚無學生</td></tr>'}</tbody></table><p class="footnote">錯誤統計包含公式錯誤、計算錯誤、單位錯誤；下載 CSV 可查看明細。</p></section>`;
 }
 function hostPanel(s) {
-  return `<section class="card role-intro"><span class="icon">👩‍🏫</span><div><h2>${escapeHTML(s.hostName)}的指揮中心</h2><p>房主不占學生名額，可管理教學節奏與宇宙事件。</p></div></section>${eventPanel(s)}${teacherSettingsPanel(s)}${teacherLiveTasks(s)}${teacherReport(s)}${teacherReviewPanel(s)}${s.phase === 'lobby' ? `<section class="card waiting"><div class="big">🪐</div><h2>等待探險家登陸</h2><p>目前 ${s.players.length} 人進入房間。<br/>最少 1 人就能開始；沒有固定職業分工。<br/>任務開啟前可以自由調整難度與時間。</p><div class="room-badge">${escapeHTML(s.code)}</div></section>` : ''}`;
+  return `<section class="card role-intro"><span class="icon">👩‍🏫</span><div><h2>${escapeHTML(s.hostName)}的指揮中心</h2><p>房主不占學生名額，可管理教學節奏與宇宙事件。</p></div></section>${eventPanel(s)}${teacherSettingsPanel(s)}${adventureSummary(s)}${teacherLiveTasks(s)}${teacherReport(s)}${teacherReviewPanel(s)}${s.phase === 'lobby' ? `<section class="card waiting"><div class="big">🪐</div><h2>等待探險家登陸</h2><p>目前 ${s.players.length} 人進入房間。<br/>最少 1 人就能開始；沒有固定職業分工。<br/>任務開啟前可以自由調整難度與時間。</p><div class="room-badge">${escapeHTML(s.code)}</div></section>` : ''}`;
 }
 function renderGame(s) {
   return `<div class="container"><header class="site-header"><div class="brand"><span class="brand-icon">🌍</span><span><div class="brand-title">星球綠化造物主</div><div class="brand-sub">PLANET MAKER · MATH LAB</div></span></div><div class="header-right"><span class="small-pill" data-connection><span class="online-dot ${connectionLive ? '' : 'off'}"></span> ${connectionLive ? '連線正常' : '連線中'}</span><button class="ghost-btn" data-action="leave">↩ 離開房間</button></div></header>
     <div class="game-top"><div><div class="eyebrow">${s.role === 'host' ? 'MISSION COMMAND · 房主視角' : 'EXPLORER MODE · 學生視角'}</div><div class="room-title">${s.phase === 'finished' ? '星球任務成果' : '打造我們的綠色星球'}</div></div><div class="top-actions"><span class="small-pill">房間 <strong class="room-code">${escapeHTML(s.code)}</strong></span><button class="mini-btn" data-action="copy" aria-label="複製房間代碼">⧉ 複製</button><span class="small-pill">👥 ${s.players.length}/${s.maxPlayers} 學生</span><span class="tag ${s.paused ? 'amber' : s.phase === 'playing' ? '' : 'blue'}">${s.paused ? '已暫停' : s.phase === 'lobby' ? '等待開始' : s.phase === 'playing' ? '進行中' : '已結束'}</span></div></div>
-    <main class="game-layout"><aside class="sidebar">${resourcesPanel(s)}${goalsPanel(s)}${playersPanel(s)}${historyPanel(s)}</aside>${planetPanel(s)}<aside class="work-panel">${s.role === 'host' ? hostPanel(s) : studentPanel(s)}<div class="rule-card"><strong>📚 數學規則</strong><ul><li>統一採用圓周率 π = 3.14。</li><li>周長是長度（km），面積是平方單位（km²）。</li><li>每人都能完成四種工程，並可同時作答。</li><li>事件答對一人就能幫助全隊；提示不影響通關。</li></ul></div></aside></main><footer class="footer">星球綠化造物主 v1.4 · 小學六年級數學課堂合作遊戲 · 本版進度僅保存在運行中的伺服器記憶體</footer></div>`;
+    <main class="game-layout"><aside class="sidebar">${resourcesPanel(s)}${goalsPanel(s)}${playersPanel(s)}${historyPanel(s)}</aside>${planetPanel(s)}<aside class="work-panel">${s.role === 'host' ? hostPanel(s) : studentPanel(s)}<div class="rule-card"><strong>📚 數學規則</strong><ul><li>統一採用圓周率 π = 3.14。</li><li>周長是長度（km），面積是平方單位（km²）。</li><li>每人都能完成四種工程，並可同時作答。</li><li>事件答對一人就能幫助全隊；提示不影響通關。</li></ul></div></aside></main><footer class="footer">星球綠化造物主 v1.5 · 小學六年級數學課堂合作遊戲 · 本版進度僅保存在運行中的伺服器記憶體</footer></div>`;
 }
 function captureFocus() {
   const active = document.activeElement;
@@ -463,6 +495,11 @@ root.addEventListener('click', async event => {
     logout(); return;
   }
   if (name === 'export') return exportCSV(state);
+  if (name === 'workTab') {workTab=button.dataset.workTab;render();return;}
+  if (name === 'explore') return action('explore',{index:Number(button.dataset.exploreIndex)});
+  if (name === 'pipeRotate') return action('pipeRotate',{index:Number(button.dataset.pipeIndex)});
+  if (name === 'decision') return action('decision',{choice:button.dataset.choice});
+  if (name === 'research') return action('research',{techId:button.dataset.techId});
    if (name === 'scratch') return scratchpad.open(button.dataset.scratch);
   if (name === 'hideReview') {teacherReveals.delete('review:'+button.dataset.playerId);render();return;}
   if (name === 'revealReview') return action('revealReview',{playerId:button.dataset.playerId});

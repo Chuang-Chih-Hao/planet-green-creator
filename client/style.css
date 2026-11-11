@@ -175,3 +175,74 @@
 .review-teacher-question small{display:block;color:#b4cbe5}
 /* Respect the user's system-level preference, including moving satellites and moon */
 @media(prefers-reduced-motion:reduce){.planet-sphere,.orbit-line,.orbit-line.two,.orbit-dot,.orbit-dot.second,.planet-moon,.planet-moon::after{animation:none!important}}
+
+
+/* V1.5: four distinct stations replace an endless worksheet UI. */
+.work-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:12px 0 14px}
+.work-tab{border:1px solid #3e6383;background:linear-gradient(145deg,#163452,#102b41);border-radius:13px;color:#cce5f4;padding:12px 8px;min-height:60px;font-weight:800;font-size:13px;cursor:pointer;transition:box-shadow .2s,border-color .2s,transform .2s}
+.work-tab span{display:inline-block;margin-left:3px}
+.work-tab.selected{color:#dcfff4;border-color:#51d3ac;background:linear-gradient(135deg,#13564d,#1c3d5a);box-shadow:0 0 0 1px #70e1bf40,0 4px 20px #008d6b22}
+.work-tab:hover:not(:disabled){transform:translateY(-2px);border-color:#80dccc}
+.adventure-overview,.adventure-card{padding:18px;margin-bottom:13px}
+.adventure-overview .section-head{margin-bottom:12px}
+.adventure-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.adventure-stats span{background:#193651;border:1px solid #345875;padding:9px 10px;border-radius:9px;font-size:12px;color:#cde0ed}
+.adventure-stats strong{color:#a9ffe6}
+.adventure-latest{margin:12px 0 0;padding:8px 10px;background:#17483e77;border-radius:8px;color:#baf5dc;font-size:12px;line-height:1.6}
+.adventure-card>p{color:#b9d1e5;font-size:13px;line-height:1.8;margin:12px 0}
+.sector-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;padding:9px;background:linear-gradient(145deg,#0d2840,#124335);border:1px solid #426979;border-radius:14px}
+.sector-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:79px;border-radius:10px;border:1px solid #557082;background:linear-gradient(145deg,#204253,#183647);color:#d6f3f2;cursor:pointer;position:relative;transition:transform .15s,border-color .15s}
+.sector-tile span{font-size:25px;filter:drop-shadow(0 0 5px #5decbe44);animation:sectorPulse 4.5s ease-in-out infinite}
+.sector-tile strong{font-size:10px;max-width:100%;line-height:1.3;text-align:center}
+.sector-tile small{font-size:9px;color:#9db9b8}
+.sector-tile.fog{background:repeating-linear-gradient(135deg,#162c4b 0 13px,#1b3555 13px 24px);border-color:#456585;border-style:dashed}
+.sector-tile.fog:hover:not(:disabled){border-color:#8bf2d0;transform:scale(1.05);background:#205b58}
+.sector-tile.revealed{background:radial-gradient(circle at 50% 23%,#1e796454,#194138 85%);border-color:#57a788}
+.sector-tile.revealed[disabled]{opacity:1;cursor:default}
+.sector-tile.fog[disabled]{opacity:.65;cursor:wait}
+.explore-discovery{margin-top:13px;padding:12px;border:1px solid #508c7c;border-radius:11px;background:#17423980}
+.explore-discovery strong{color:#b6ffe7}
+.explore-discovery p{font-size:12px;color:#cae7e1;line-height:1.6;margin:6px 0}
+.explore-discovery small{color:#95c5b5}
+.planet-decision{padding:15px;border:1px solid #e0ba6788;background:#67502433;border-radius:12px;margin:14px 0}
+.planet-decision h3{color:#ffdc9e;font-size:15px;margin:0 0 5px}
+.planet-decision p{font-size:12px;color:#e5d6b9;line-height:1.7}
+.decision-options{display:grid;gap:8px;margin-top:12px}
+.decision-options button{text-align:left;padding:11px 13px;border-radius:10px;background:#2e4355;border:1px solid #5b8395;color:#f5f9ff;cursor:pointer}
+.decision-options button strong{display:block;margin-bottom:5px;font-size:13px}
+.decision-options button small{display:block;color:#c9d8d8;font-size:11px}
+.decision-options button:hover:not(:disabled){border-color:#8beeb7;background:#305b57}
+.pipeline-shell{position:relative;background:radial-gradient(ellipse at center,#134759,#0b233d 82%);border:1px solid #3a7596;border-radius:15px;padding:34px 14px;margin:15px 0 10px}
+.pipe-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;max-width:340px;margin:auto}
+.pipe-tile{position:relative;aspect-ratio:1;border:1px solid #47738f;border-radius:11px;background:radial-gradient(circle,#183d55,#13283d);cursor:pointer;min-width:0;overflow:hidden;transition:border-color .15s}
+.pipe-tile:hover:not(:disabled){border-color:#88e6f5}
+.pipe-tile:disabled{cursor:default}
+.pipe-center{position:absolute;left:50%;top:50%;width:22px;height:22px;transform:translate(-50%,-50%);border-radius:50%;background:#719cae;border:3px solid #a5c7d1;z-index:2;box-shadow:0 0 13px #9bc2db4a}
+.pipe-arm{position:absolute;background:linear-gradient(90deg,#426d82,#a2c4cb,#426d82);box-shadow:inset 0 0 0 2px #d7eff344}
+.pipe-n{left:calc(50% - 7px);top:0;width:14px;height:50%}
+.pipe-s{left:calc(50% - 7px);bottom:0;width:14px;height:50%}
+.pipe-w{left:0;top:calc(50% - 7px);width:50%;height:14px}
+.pipe-e{right:0;top:calc(50% - 7px);width:50%;height:14px}
+.pipe-tile.flowing{border-color:#80d8ec;background:radial-gradient(circle,#135a72,#14314a);box-shadow:inset 0 0 22px #00bce22c}
+.pipe-tile.flowing .pipe-center{background:#69dcff;box-shadow:0 0 13px #55d6feaa}
+.pipe-tile.flowing .pipe-arm{background:linear-gradient(90deg,#299cbd,#a2f5ff,#299cbd)}
+.pipe-endpoint{position:absolute;z-index:4;font-weight:700;font-size:12px;color:#9fe8fc}
+.pipe-endpoint.start{top:8px;left:10px}
+.pipe-endpoint.end{bottom:8px;right:10px}
+.research-list{display:grid;gap:9px;margin-top:14px}
+.research-item{display:flex;align-items:center;gap:10px;padding:11px;border:1px solid #42607a;border-radius:12px;background:#182e48}
+.research-item.owned{border-color:#439c7e;background:#194238}
+.research-icon{font-size:25px;width:37px;text-align:center;flex-shrink:0}
+.research-detail{flex:1;min-width:0}
+.research-detail strong{display:block;font-size:12px;color:#d9fff1;margin-bottom:4px}
+.research-detail small{display:block;font-size:11px;color:#a8c5d9;line-height:1.5}
+.research-item button{white-space:nowrap;font-size:10px}
+@keyframes sectorPulse{0%,100%{opacity:.72;transform:scale(.95)}50%{opacity:1;transform:scale(1.06)}}
+@media(max-width:600px){
+ .work-tab{font-size:12px;min-height:58px}
+ .sector-tile{min-height:67px}.sector-tile span{font-size:20px}.sector-tile strong{font-size:9px}
+ .adventure-stats span{font-size:11px}
+ .pipeline-shell{padding:37px 10px}
+ .research-item{flex-wrap:wrap}.research-item button{margin-left:auto}
+}
+@media(prefers-reduced-motion:reduce){.sector-tile span{animation:none!important}}

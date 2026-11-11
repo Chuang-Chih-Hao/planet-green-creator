@@ -1,4 +1,5 @@
-// V1.3：關卡按順序推進，不再由教師選擇不同模式。
+// V1.5：三關要完成數學建設＋合作冒險，不再只是反覆計算。
+import { explorationTarget } from './adventure.js';
 export const STAGES = [
   { id:1, title:'荒土甦醒', emoji:'🌱', subtitle:'建立第一片森林與能源基地', problem:'荒蕪星球缺少氧氣與電力，必須先啟動造林及發電。' },
   { id:2, title:'水土復育', emoji:'💧', subtitle:'修復乾旱、建立穩定的水循環', problem:'第一階段開發造成水資源下降！必須修復地形、建設水循環。' },
@@ -10,12 +11,13 @@ export const GAME_MODES = {}; // 舊版相容性匯出，不再用於設定／�
 
 export function stageGoalList(room) {
   const c=room.completed, r=room.resources, n=room.requiredBuildings;
-  const stage=room.stage||1, total=room.structures.length;
+  const stage=room.stage||1, total=room.structures.length, a=room.adventure;
   if(stage===1) {
     const need=Math.max(2,Math.ceil(n/3));
     return [
       {id:'buildings',text:'完成至少 '+need+' 項初期工程（目前 '+total+'）',met:total>=need},
       {id:'forest',text:'至少建立 1 片森林（目前 '+c.forest+'）',met:c.forest>=1},
+      {id:'explore',text:'探索 '+explorationTarget(room,1)+' 個地圖區域（目前 '+a.discovered+'）',met:a.discovered>=explorationTarget(room,1)},
       {id:'power',text:'至少建立 1 座能源站（目前 '+c.power+'）',met:c.power>=1},
       {id:'oxygen',text:'氧氣達到 26（目前 '+r.oxygen+'）',met:r.oxygen>=26},
       {id:'energy',text:'能源達到 34（目前 '+r.energy+'）',met:r.energy>=34},
@@ -27,6 +29,10 @@ export function stageGoalList(room) {
     return [
       {id:'buildings',text:'累計完成至少 '+need+' 項工程（目前 '+total+'）',met:total>=need},
       {id:'crater',text:'完成 1 項以上地形修復（目前 '+c.crater+'）',met:c.crater>=1},
+      {id:'explore',text:'累計探索 '+explorationTarget(room,2)+' 格地圖（目前 '+a.discovered+'）',met:a.discovered>=explorationTarget(room,2)},
+      {id:'pipe',text:'合作接通 1 次水循環管線（目前 '+a.pipeRepairs+'）',met:a.pipeRepairs>=1},
+      {id:'research',text:'完成 1 項科技升級（目前 '+a.upgrades.length+'）',met:a.upgrades.length>=1},
+      {id:'decision',text:'共同處理 1 次探索事件（目前 '+a.decisionsResolved+'）',met:a.decisionsResolved>=1},
       {id:'water',text:'修復水循環，水資源達到 25（目前 '+r.water+'）',met:r.water>=25},
       {id:'stability',text:'星球穩定度達到 50（目前 '+r.stability+'）',met:r.stability>=50},
       {id:'hazards',text:'解除尚未修復的異常（目前 '+room.hazards.length+'）',met:room.hazards.length===0}
@@ -36,6 +42,10 @@ export function stageGoalList(room) {
   return [
     {id:'buildings',text:'全隊完成 '+n+' 項工程（目前 '+total+'）',met:total>=n},
     {id:'variety',text:'四種工程各至少完成 1 項',met:['forest','orbit','crater','power'].every(k=>c[k]>=1)},
+    {id:'explore',text:'探索 '+explorationTarget(room,3)+' 格區域（目前 '+a.discovered+'）',met:a.discovered>=explorationTarget(room,3)},
+    {id:'pipe',text:'接通 2 次水循環管線（目前 '+a.pipeRepairs+'）',met:a.pipeRepairs>=2},
+    {id:'research',text:'升級至少 2 項科技（目前 '+a.upgrades.length+'）',met:a.upgrades.length>=2},
+    {id:'decision',text:'作出 2 次團隊環境決策（目前 '+a.decisionsResolved+'）',met:a.decisionsResolved>=2},
     {id:'power',text:'能源站累計完成 '+requiredPower+' 項（目前 '+c.power+'）',met:c.power>=requiredPower},
     {id:'orbit',text:'建成至少 1 座星環防護工程（目前 '+c.orbit+'）',met:c.orbit>=1},
     {id:'challenge',text:'解決 1 次後期危機（已完成 '+(room.stageChallengesResolved||0)+' 次）',met:(room.stageChallengesResolved||0)>=1},
