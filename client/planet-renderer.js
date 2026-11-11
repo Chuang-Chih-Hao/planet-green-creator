@@ -27,6 +27,7 @@ const continentalPlates=[
  [2.39,.03,.38,.33,.58],[2.89,-.59,.46,.36,.74]
 ];
 const craters=[[-2.2,.51,.095],[-1.3,-.13,.13],[-.5,.37,.07],[.42,-.46,.09],[1.22,.28,.15],[2.37,-.13,.12],[2.9,.4,.08],[-2.78,-.6,.07]];
+const craterFields=craters.map((crater,index)=>[...crater,index+1]);
 const riverRuns=[[-1.18,.28,.85],[.68,-.3,.64],[-2.46,.22,.78],[1.24,.49,.62],[2.41,.02,.64]];
 const powerSites=[[-2.46,.18],[-.92,.13],[.65,-.37],[1.13,.34],[2.66,-.20],[.1,.03]];
 function elevation(lon,lat,u,v){
@@ -61,6 +62,54 @@ export function derivePlanetEcology(state={},demo=false){
  return {forest,ocean,power,repair,sky,stage,win,hazards,
    resources:{oxygen,water,energy,stability},completed:{forest:count('forest'),crater:count('crater'),power:count('power'),orbit:count('orbit')}};
 }
+// Soft sculpted impact basins: asymmetric walls, ejecta dust and jagged rims.
+// Return a sampled crater rather than a mathematical perfect circle outline.
+export function craterProfile(lon,lat,crater){
+ const [cx,cy,r,seed=0]=crater;
+ const dx=distLon(lon,cx)*Math.cos(lat),dy=lat-cy;
+ if(Math.abs(dx)>r*1.75||Math.abs(dy)>r*1.75)return null;
+ const angle=Math.atan2(dy,dx);
+ const irregular=1+.125*Math.sin(5*angle+seed*1.7)
+  +.07*Math.sin(9*angle-seed*2.3)+.045*Math.cos(15*angle+seed*.7);
+ const radial=Math.hypot(dx*1.05,dy*.92)/(r*irregular);
+ if(radial>1.55)return null;
+ // Light is cast from the upper left of the projected satellite view.
+ const facing=clip(.5+.5*((-dx*.65+dy*.76)/(Math.hypot(dx,dy)+1e-6)));
+ return {radial,facing,angle,irregular};
+}
+const craterBell=(x,center,width)=>Math.exp(-Math.pow((x-center)/width,2));
+export function craterReliefColor(base,lon,lat,crater,damage,grain=.5){
+ const profile=craterProfile(lon,lat,crater);
+ if(!profile||damage<=0)return base;
+ const {radial:d,facing,angle}=profile;
+ const strength=clip(damage);
+ // Diffuse ejecta and weathered rock blend into the surroundings;
+ // no single-pixel black contour is drawn.
+ let rgb=base.slice();
+ const debris=craterBell(d,1.19,.32)*strength*(.13+.10*grain)
+   *(.84+.16*Math.sin(angle*18+crater[3]*3));
+ rgb=rgb.map((v,k)=>lerp(v,[186,143,113][k],debris));
+ // The entire crater floor sinks and darkens, not merely its perimeter.
+ const floor=clip((1.07-d)/.23)*strength;
+ const floorNoise=(grain-.5)*17;
+ rgb=rgb.map((v,k)=>lerp(v,[108+floorNoise,83+floorNoise,73+floorNoise][k],floor*.52));
+ // The inner slope has directional shade: upper-left wall is shadowed,
+ // lower-right wall catches sunlight, giving visible concavity.
+ const slope=craterBell(d,.80,.23)*strength*.52;
+ const innerLight=1-facing;
+ const slopeColor=[69+innerLight*92,56+innerLight*71,57+innerLight*51];
+ rgb=rgb.map((v,k)=>lerp(v,slopeColor[k],slope));
+ // Broad irregular raised rim, sunlit on one side and weathered elsewhere.
+ const ridge=craterBell(d,1.015,.17)*strength*.45;
+ const rimColor=[107+facing*106,88+facing*79,79+facing*65];
+ rgb=rgb.map((v,k)=>lerp(v,rimColor[k],ridge));
+ // Directional shallow erosion streaks break any remaining circle symmetry.
+ const erosion=craterBell(d,.63,.32)*strength*.065
+    *(Math.sin(angle*14+grain*4)*.5+.5);
+ rgb=rgb.map((v,k)=>lerp(v,[168,124,98][k],erosion));
+ return rgb;
+}
+
 function terrainAtlas(p){
  const n=ATLAS_W*ATLAS_H;
  const colors=new Uint8ClampedArray(n*4);
@@ -114,15 +163,9 @@ function terrainAtlas(p){
         }
       }
     }
-    if(damage>.14){
-      for(const [cx,cy,r] of craters){
-        const dlon=distLon(lon,cx)*Math.cos(lat),dlat=lat-cy,d=Math.sqrt(dlon*dlon+dlat*dlat);
-        const ring=Math.abs(d-r)<.0095,inside=d<r;
-        if(ring){
-          rgb=rgb.map((c,k)=>lerp(c,[74,63,65][k],damage*.78));
-        }else if(inside&&d<r*.80){
-          rgb=rgb.map((c,k)=>lerp(c,[90,77,82][k],damage*.26));
-        }
+    if(damage>.025){
+      for(const crater of craterFields){
+        rgb=craterReliefColor(rgb,lon,lat,crater,damage,detail);
       }
     }
     if(p.power>.045){

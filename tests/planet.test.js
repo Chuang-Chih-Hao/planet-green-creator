@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { derivePlanetEcology, planetMapSummary } from '../client/planet-renderer.js';
+import { derivePlanetEcology, planetMapSummary, craterProfile, craterReliefColor } from '../client/planet-renderer.js';
 
 const barren={
  stage:1,
@@ -55,4 +55,30 @@ test('傷害會降低地貌復甦程度；新視覺完全由前端資源生成',
  assert.match(renderer,/cherryStrength/,'櫻花季應改變森林像素而非只增加貼圖');
  assert.match(renderer,/if\(energy>\.17\)cl=3/,'能源亮區應能供脈衝事件辨識');
  assert.match(renderer,/prefers-reduced-motion/);
+});
+
+
+test('V1.9.1 撞擊坑是柔和凹陷盆地，不是只有一圈黑色圓線',()=>{
+ const crater=[1.22,.28,.15,5],base=[163,117,96];
+ const center=craterReliefColor(base,1.22,.28,crater,1,.51);
+ const rim=craterReliefColor(base,1.22+.14,.28,crater,1,.51);
+ const distant=craterReliefColor(base,1.22+.6,.28,crater,1,.51);
+ assert.ok(center[0]<base[0]-20,'坑底整片應有可感知陰影');
+ assert.ok(center[1]<base[1]-12,'坑底不應維持與坑外完全同色');
+ assert.notDeepEqual(rim,base,'坑壁應有抬升岩層，不是空心圓');
+ assert.deepEqual(distant,base,'坑外不應出現無限延伸的黑線');
+});
+test('坑壁有方向性陰影，非完美同心圓；修復後漸漸淡化',()=>{
+ const crater=[1.22,.28,.15,5],base=[163,117,96];
+ const upper=craterReliefColor(base,1.22-.03,.28+.08,crater,1,.51);
+ const lower=craterReliefColor(base,1.22+.03,.28-.08,crater,1,.51);
+ assert.ok(Math.abs(upper[0]-lower[0])>5,'凹洞內壁需有受光方向差異');
+ const east=craterProfile(1.22+.15,.28,crater);
+ const north=craterProfile(1.22,.28+.15,crater);
+ assert.ok(Math.abs(east.radial-north.radial)>.04,'坑緣不能是相同半徑的工整圓形');
+ const initial=craterReliefColor(base,1.22,.28,crater,1,.51);
+ const repaired=craterReliefColor(base,1.22,.28,crater,.06,.51);
+ const diff=c=>Math.abs(c[0]-base[0])+Math.abs(c[1]-base[1])+Math.abs(c[2]-base[2]);
+ assert.ok(diff(repaired)<diff(initial)*.15,'修復工程應明顯淡化坑洞');
+ assert.deepEqual(craterReliefColor(base,1.22,.28,crater,0),base);
 });
