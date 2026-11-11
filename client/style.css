@@ -369,3 +369,53 @@
 .goal-kind-grid span{background:#23465b;padding:9px 7px;border-radius:9px;font-size:12px;color:#e2fff3}
 .goal-kind-grid small{display:block;font-size:10px;color:#c5d9e3;margin-top:3px}
 @media(max-width:440px){.goal-kind-grid{grid-template-columns:1fr}}
+
+
+/* V1.9: procedural spherical terrain replaces emoji/building stickers.
+   Canvas renders longitude-based land, water, rivers, forests, repair and energy. */
+.planet-sphere.planet-sphere-canvas{
+  animation:none!important;
+  background:#263c4e;
+  isolation:isolate;
+  overflow:hidden;
+  border-radius:50%;
+  box-shadow:inset 0 0 15px #0c223c70,0 0 0 3px #a3daeb3d,0 0 22px #5cc4e32b;
+  transition:box-shadow 2s;
+  transform:none!important;
+}
+.planet-sphere-canvas::before,.planet-sphere-canvas::after{display:none!important}
+.planet-stage-0 .planet-sphere-canvas{box-shadow:inset 0 0 15px #35241b88,0 0 0 3px #bd998856,0 0 22px #ac745520}
+.planet-stage-1 .planet-sphere-canvas{box-shadow:inset 0 0 15px #173a3f88,0 0 0 3px #a2d8d355,0 0 28px #5bd39d32}
+.planet-stage-2 .planet-sphere-canvas,.planet-stage-3 .planet-sphere-canvas{box-shadow:inset 0 0 15px #12344d88,0 0 0 3px #b1eff078,0 0 38px #61e3c750}
+.planet-terrain-canvas{
+  display:block;position:absolute;inset:0;width:100%;height:100%;
+  z-index:2;object-fit:cover;image-rendering:auto;
+  border-radius:50%;
+}
+.planet-canvas-specular{
+  position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:50%;
+  background:
+    radial-gradient(ellipse at 30% 24%,rgba(255,255,255,.18) 0%,rgba(255,255,255,.04) 19%,transparent 43%),
+    radial-gradient(ellipse at 80% 72%,transparent 33%,rgba(2,19,38,.19) 79%,rgba(3,15,30,.42) 100%);
+  mix-blend-mode:screen;
+}
+.planet-environment-warning{
+  position:absolute;left:50%;top:50%;width:300px;height:300px;
+  transform:translate(-50%,-50%);z-index:6;border-radius:50%;
+  border:2px solid rgba(249,147,96,.45);pointer-events:none;
+  box-shadow:0 0 30px rgba(243,112,83,.22);
+  animation:planetHazardPulse 2.8s ease-in-out infinite;
+}
+@keyframes planetHazardPulse{
+  0%,100%{opacity:.25;transform:translate(-50%,-50%) scale(.99)}
+  50%{opacity:.82;transform:translate(-50%,-50%) scale(1.035)}
+}
+/* All stage-dependent ecological shapes now belong to the globe's map,
+   not to absolute-positioned continent, plant or construction icons. */
+.planet-sphere-canvas .planet-surface,
+.planet-sphere-canvas .planet-cloud,
+.planet-sphere-canvas .planet-building,
+.planet-sphere-canvas .planet-biosignal{display:none!important}
+@media(prefers-reduced-motion:reduce){
+  .planet-environment-warning{animation:none!important}
+}
