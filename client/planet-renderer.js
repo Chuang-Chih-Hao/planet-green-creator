@@ -133,7 +133,7 @@ function terrainAtlas(p){
           const circuitry=Math.max(0,(.013-Math.min(Math.abs(Math.sin(dx*48)),Math.abs(Math.sin(dy*57)))*.18))/.013;
           const energy=clip(p.power*halo*(.25+circuitry*.75));
           rgb=[lerp(rgb[0],88,energy),lerp(rgb[1],215,energy),lerp(rgb[2],220,energy)];
-          if(energy>.55)cl=3;
+          if(energy>.17)cl=3;
         }
       }
     }
@@ -296,6 +296,8 @@ function paint(scene,clock,reduced){
  const spin=yaw/TAU;
  const cloudsShift=(reduced?0:(clock-startClock)/150000)%1;
  const pixels=GLOBE*GLOBE;
+ const cherry=scene.event?.kind==='cherry'&&clock<scene.event.until;
+ const cherryStrength=cherry?clip(Math.min((clock-scene.event.started)/700,(scene.event.until-clock)/900))*.72:0;
  for(let k=0;k<pixels;k++){
   const a=projector.alpha[k],out=k*4;
   if(!a){output[out+3]=0;shown[k]=255;continue;}
@@ -309,6 +311,15 @@ function paint(scene,clock,reduced){
    const surface=atlas.colors[src+channel];
    const cloudy=lerp(surface,[211,230,236][channel],cp);
    output[out+channel]=Math.min(255,cloudy*light);
+  }
+  if(cherryStrength&&atlas.classes[index]===1){
+   // A cherry season recolors whole forest clusters, not just a floating sticker.
+   const pinkNoise=Math.sin(x*.12+projector.latitudeRow[k]*.0004)+Math.cos(x*.065+projector.latitudeRow[k]*.0016);
+   if(pinkNoise>-.36){
+    output[out]=lerp(output[out],247,cherryStrength);
+    output[out+1]=lerp(output[out+1],160,cherryStrength);
+    output[out+2]=lerp(output[out+2],208,cherryStrength);
+   }
   }
   output[out+3]=a;
   shown[k]=atlas.classes[index];

@@ -52,5 +52,7 @@ test('傷害會降低地貌復甦程度；新視覺完全由前端資源生成',
  assert.match(renderer,/whale/);
  assert.match(renderer,/aurora/);
  assert.match(renderer,/energyPulse/);
+ assert.match(renderer,/cherryStrength/,'櫻花季應改變森林像素而非只增加貼圖');
+ assert.match(renderer,/if\(energy>\.17\)cl=3/,'能源亮區應能供脈衝事件辨識');
  assert.match(renderer,/prefers-reduced-motion/);
 });
