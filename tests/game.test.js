@@ -127,7 +127,8 @@ test('漏選單位不扣分；觀念題不必選公式和單位',()=>{
 });
 test('第一關數學完成後立刻自動開始記憶接力，建造被鎖定',()=>{
  const {room,players:[p]}=roomWith();room.durationMinutes=15;startRoom(room);
- math(room,p,'forest');math(room,p,'power');
+ const r1=math(room,p,'forest'),r2=math(room,p,'power');
+ assert.ok(room.teamGame,'debug stage1: '+JSON.stringify({r1,r2,goals:mathStageGoals(room),completed:room.completed,resources:room.resources,stage:room.stage}));
  assert.equal(room.stage,1);
  assert.equal(room.teamGame.kind,'memory');
  assert.equal(publicState(room,p.token).teamGame.kind,'memory');
@@ -188,7 +189,9 @@ test('第三關攔截動態倒數與星圖滑塊可完成',()=>{
 });
 test('三關全部通過後自動進入回顧，保留老師資料隱藏',()=>{
  const {room,players:[p]}=roomWith();room.durationMinutes=15;startRoom(room);
- math(room,p,'forest');math(room,p,'power');solveMemory(room,p);solvePulse(room,p);
+ const r1=math(room,p,'forest'),r2=math(room,p,'power');
+ assert.ok(room.teamGame,'debug stage sequence: '+JSON.stringify({r1,r2,goals:mathStageGoals(room),completed:room.completed,resources:room.resources}));
+ solveMemory(room,p);solvePulse(room,p);
  assert.equal(room.stage,2);
  math(room,p,'crater');
  assert.equal(room.teamGame.kind,'pipe');solvePipe(room,p);solveRover(room,p);
@@ -204,7 +207,8 @@ test('三關全部通過後自動進入回顧，保留老師資料隱藏',()=>{
 });
 test('教師略過單款遊戲不會加資源獎勵',()=>{
  const {room,players:[p]}=roomWith();room.durationMinutes=15;startRoom(room);
- math(room,p,'forest');math(room,p,'power');
+ const r1=math(room,p,'forest'),r2=math(room,p,'power');
+ assert.ok(room.teamGame,'debug stage skip: '+JSON.stringify({r1,r2,goals:mathStageGoals(room),completed:room.completed,resources:room.resources}));
  const before=room.resources.oxygen;
  const r=skipTeamGame(room);
  assert.match(r.message,/已略過/);
@@ -222,8 +226,8 @@ test('事件仍保留教師手動題目與災後修復功能',()=>{
  assert.equal(win.correct,true);
  triggerEvent(room,'flare');failEvent(room);
  assert.equal(room.hazards.at(-1).status,'lingering');
- math(room,p,'power');
- assert.equal(room.hazards.filter(x=>x.id==='flare').length,0);
+ const result=math(room,p,'power');
+ assert.equal(room.hazards.filter(x=>x.id==='flare').length,0,'debug flare: '+JSON.stringify({result,hazards:room.hazards}));
 });
 test('結束後課後複習與反思由老師查看，不洩漏其他學生資料',()=>{
  const {room,players:[p1,p2]}=roomWith(2);
