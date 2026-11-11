@@ -51,7 +51,7 @@
 - **4｜稀有生態演出**：符合條件才在不固定間隔（約 18～46 秒的等待區間）出現一個持續約 6～11 秒的視覺特效：森林成熟後，不規則森林區塊會暫時染成粉紅櫻花林並伴隨花瓣；海洋復甦後有鯨魚躍出和水花；能源充足時會在實際發光地表區域產生脈衝波紋；大氣穩定後可出現極光。特效不涉及答題或資源獎懲，無需學生另外選擇。
 - **視覺檢查補強**：增加整片林地的粉色櫻花季變色，不只是貼一株櫻花；也降低地表能源辨識閾值，使能源亮區在球面上可見、可被脈衝動畫選中。包含地貌比例與不同經度診斷測試。檔案：`client/planet-renderer.js`、`tests/planet.test.js`。
 - **5｜既有遊戲不變**：保留數學估算四選一、單位題、三階段六款合作小遊戲、30 分鐘上限、每三分鐘宇宙事件、教師查看即時題目及安全揭露解答、課後回顧、CSV。`client/app.js` 改為呼叫新球面 Canvas，移除球面 emoji 和外掛受損圖標；`client/style.css` 加入專用球體與大氣樣式。
-- **測試與部署**：新增 `tests/planet.test.js`，驗證初始荒地、建造後森林水域能源比例成長、不同經度顯示不同地貌、異常退化及已移除球面建築圖標；擴充 `tests/integration.test.js` 確認新 Canvas 模組可被網站取得並且前端有載入。`package.json` 更新至 `1.9.0`，`npm test` 增加 Canvas 程式語法檢查。正式 GitHub Actions 和 Render 結果待合併後補記。
+- **驗證與部署（2026-11-12 台灣時間）**：V1.9 已合併到 `main`（程式提交 `8849b0b`）。新增 `tests/planet.test.js` 驗證初始荒地、森林海洋能源地貌隨資源增加、不同經度及事件退化；`tests/integration.test.js` 檢查 Canvas 模組可正常供應；`package.json` 已更新至 `1.9.0` 並納入新模組語法檢查。另已直接執行渲染器的資料模型與模擬 Canvas 繪製檢查，確認同一球面位置旋轉前後顏色不同、能源亮區可見且初始到復甦的覆蓋率變化符合預期。**Render 已確認提交 `8849b0b` 為 Live**，部署日誌顯示 `planet-green-creator@1.9.0` 已啟動，公開網址 https://planet-green-creator.onrender.com 。**GitHub Actions [V1.9 主分支](https://github.com/Chuang-Chih-Hao/planet-green-creator/actions/runs/43098930079) 截至本次檢查仍在 queued，尚無正式通過結果**，請勿視為 CI 完成。此 README 補記也會觸發一次文件版自動部署，遊戲程式未再更改；尚未完成實際多裝置視覺體驗測試。
 
 ### V1.8.0 — 2026-11-12
 
