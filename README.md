@@ -50,7 +50,8 @@
 - **錯誤提示**：估算選錯時提醒檢查 π ≈ 3、半徑／直徑與面積／周長的關係；仍不直接透露選項正解。涉及 `server/game.js`。
 - **測試修正**：首次 Pull Request CI 為 21/22 通過，剩餘測試因隨機出現觀念題，卻誤把它作為數字估算題檢查。整合測試已改為先抽取數值估算題，再驗證數值選項與解答權限，不改變正式遊戲抽題邏輯。檔案：`tests/integration.test.js`。
 - **四選一中文單位補強**：第二輪 CI 顯示估算選項原本使用 `km`／`km²` 英文符號，改為「公里／平方公里」中文呈現，更符合國小學生閱讀與測試期待，不變動答案計算邏輯。檔案：`server/estimation-tasks.js`。
-- **測試**：新增對四類工程估算題的選項唯一性、數字變化、合理答案、多人私人線索分配及 API 權限的測試。正式 CI 結果與 Render 部署狀態以本次推送後的確認為準。涉及 `tests/game.test.js`、`tests/integration.test.js`。
+- **正式驗證（2026-11-12 台灣時間）**：GitHub Actions [V1.7 主分支測試](https://github.com/Chuang-Chih-Hao/planet-green-creator/actions/runs/43078559648) 執行 `npm test`，**22 項通過、0 項失敗**。Render 已將 V1.7 程式提交 `40dfb1b` 部署為 **Live**（網址 https://planet-green-creator.onrender.com ）。本筆 README 驗證補記會再觸發文件版本自動部署，執行程式未更動。未完成真實多人裝置的操作體驗驗證。
+- **測試**：涵蓋四類工程估算選項、數字變化與合理答案、多人私人線索、API 權限與三關完整流程。涉及 `tests/game.test.js`、`tests/integration.test.js`。
 
 ### V1.6.0 — 2026-11-11
 
