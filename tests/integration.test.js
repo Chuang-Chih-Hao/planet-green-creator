@@ -128,8 +128,13 @@ test('兩位學生的估算題有四個選項，教師能看到選項但學生�
  const h=await post('create',{name:'估算教師'});
  const p=await post('join',{name:'估算玩家',code:h.state.code});
  await post('action',{token:h.token,action:'start'});
- const student=await state(p.token);
+ let student=await state(p.token);
+ for(let tries=0;tries<25&&!student.ownTask?.context?.startsWith('估算任務');tries++){
+   await post('action',{token:p.token,action:'selectTask',kind:'forest'});
+   student=await state(p.token);
+ }
  const t=student.ownTask;
+ assert.ok(t.context.startsWith('估算任務'),'本測試應使用數值估算題，而不是觀念題');
  assert.equal(t.type,'choice');
  assert.equal(t.choices.length,4);
  assert.ok(t.choices.every(x=>/公里/.test(x.label)));
