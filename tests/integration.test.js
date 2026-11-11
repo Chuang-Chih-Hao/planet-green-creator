@@ -39,7 +39,7 @@ test('一房可加入最多五位學生，房主無法代做學生小遊戲',asy
  }
  assert.equal((await post('join',{name:'第六位',code:host.state.code})).status,400);
  const start=await post('action',{token:host.token,action:'start'});
- assert.equal(start.status,200);assert.equal(start.state.stage,1);assert.equal(start.state.requiredBuildings,20);
+ assert.equal(start.status,200);assert.equal(start.state.stage,1);assert.equal(start.state.requiredBuildings,15);
  const unauthorized=await post('action',{token:players[0].token,action:'skipTeamGame'});
  assert.equal(unauthorized.status,403);
 });
