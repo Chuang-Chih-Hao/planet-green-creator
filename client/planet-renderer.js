@@ -53,8 +53,8 @@ export function derivePlanetEcology(state={},demo=false){
  const stability=demo?85:Number(resources.stability??70);
  const win=demo||Boolean(state.result?.win||state.win);
  const hazards=demo?0:Math.max(0,Array.isArray(state.hazards)?state.hazards.length:Number(state.hazards)||0);
- const forest=clip(count('forest')*.22+(oxygen-20)*.0032+(stage-1)*.10+(win?.18:0)-hazards*.05);
- const ocean=clip((water-30)*.007+count('crater')*.23+(stage-1)*.11+(win?.14:0)-hazards*.05);
+ const forest=clip(count('forest')*.22+(oxygen-20)*.0032+(stage-1)*.10+(win?.18:0))*(1-clip(hazards*.17,0,.85));
+ const ocean=clip((water-30)*.007+count('crater')*.23+(stage-1)*.11+(win?.14:0))*(1-clip(hazards*.16,0,.8));
  const power=clip(count('power')*.28+(energy-25)*.0028+(win?.12:0));
  const repair=clip(count('crater')*.22+(stability-70)*.003+(stage-1)*.13+(win?.16:0)-hazards*.09);
  const sky=clip(.12+ocean*.58+forest*.28+repair*.20);
