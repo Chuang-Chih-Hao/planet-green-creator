@@ -9,7 +9,7 @@ export const TEAM_GAMES={
   3:['defense','mosaic']
 };
 const INFO={
-  memory:{title:'🌱 生命核心・記憶接力',hint:'記住六個以上發光節點，再依序由不同隊友接力按下。'},
+  memory:{title:'🌱 生命核心・線索接力',hint:'每人只會看到自己負責的 2 個位置線索。持有第 N 格線索的同學口頭告訴操作員符號，操作員再按下對應節點。'},
   pulse:{title:'⚡ 光能共振・節奏校準',hint:'觀察正在移動的能量光標。每次輪到一位隊友，光標進入綠區時按下充能。'},
   pipe:{title:'💧 修復水道・旋轉水管',hint:'合作轉動水管，把左上入口連到右下出口，讓水循環恢復。'},
   rover:{title:'🚜 救援車・迷宮導航',hint:'每人輪流控制救援車方向，避開障礙，抵達星球另一端的基地。'},
@@ -93,8 +93,15 @@ export function startTeamGame(room){
   title:INFO[kind].title,description:INFO[kind].hint,startedAt:at,turnIndex:0,turnAt:at,
   moves:0,contributors:{},message:'全隊合作開始！',version:1};
  if(kind==='memory'){
-  g.sequence=Array.from({length:Math.max(6,room.players.length*2)},()=>rand(4));
-  g.step=0;g.revealUntil=at+7000;g.hidden=false;g.mistakes=0;
+  // At least two players: exactly two clues per player, with the operator and clue holder deliberately different.
+  // Solo classroom testing uses four clues held by the only player.
+  const n=Math.max(1,room.players.length);
+  const total=n===1?4:n*2;
+  g.sequence=Array.from({length:total},()=>rand(4));
+  g.clues=g.sequence.map((pad,index)=>({
+   position:index+1,pad,ownerId:room.players[(index+1)%n].id
+  }));
+  g.step=0;g.hidden=true;g.mistakes=0;
  }
  if(kind==='pulse'){
   g.charges=0;g.goal=Math.max(5,room.players.length+2);g.cycleMs=9000;
@@ -123,17 +130,17 @@ function play(room,player,body) {
  const g=room.teamGame;
  const op=String(body.move??'');
  if(g.kind==='memory'){
-  if(!g.hidden&&now()<g.revealUntil)return reject('先一起記住發光順序，倒數後開始接力。');
-  if(!g.hidden)g.hidden=true;
   const pad=Number(body.index);
   if(!Number.isInteger(pad)||pad<0||pad>3)throw new Error('請點擊四個能量節點其中之一');
   if(pad!==g.sequence[g.step]){
    g.mistakes++;g.version++;
-   return reject('順序不對，再請隊友回想第 '+(g.step+1)+' 個節點。');
+   const holder=room.players.find(p=>p.id===g.clues[g.step].ownerId);
+   return reject('這不是第 '+(g.step+1)+' 格的符號。請 '+(holder?.name||'線索持有人')+' 再讀出自己畫面上的第 '+(g.step+1)+' 格線索。');
   }
   g.step++;advance(g,player);
   if(g.step>=g.sequence.length)return finished(g);
-  return reject('✅ 第 '+g.step+' 步正確！換下一位隊友接力。');
+  const next=room.players.find(p=>p.id===g.clues[g.step].ownerId);
+  return reject('✅ 第 '+g.step+' 格完成！請 '+(next?.name||'隊友')+' 念出第 '+(g.step+1)+' 格的線索，由輪到的人操作。');
  }
  if(g.kind==='pulse'){
   if(op!=='charge')throw new Error('請在亮區按下充能');
@@ -205,7 +212,6 @@ export function playTeamGame(room,player,body={}){
 export function tickTeamGame(room){
  const g=room.teamGame;
  if(!g||room.paused||room.phase!=='playing')return false;
- if(g.kind==='memory'&&!g.hidden&&now()>=g.revealUntil){g.hidden=true;g.version++;return true;}
  if(g.kind==='defense'&&now()>=g.deadlineAt){
   g.misses++;
   room.resources.stability=Math.max(0,room.resources.stability-2);
@@ -232,8 +238,16 @@ export function publicTeamGame(room,viewer){
   index:g.index,total:g.total,moves:g.moves,message:g.message,contributors:g.contributors,
   turnName:current?.name||'探險家',turnPlayerId:current?.id||null,myTurn:canPlay,
   turnAt:g.turnAt,teammates:room.players.map(p=>({id:p.id,name:p.name,acted:!!g.contributors[p.id]}))};
- if(g.kind==='memory')return {...base,step:g.step,length:g.sequence.length,hidden:g.hidden,
-  revealUntil:g.revealUntil,pads:PADS,sequence:g.hidden?null:g.sequence,mistakes:g.mistakes};
+ if(g.kind==='memory'){
+  const holder=room.players.find(p=>p.id===g.clues[g.step]?.ownerId);
+  return {...base,step:g.step,length:g.sequence.length,hidden:true,
+   sequence:null,
+   clueHolderName:holder?.name||null,
+   myClues:viewer?g.clues.filter(c=>c.ownerId===viewer.id).map(c=>({
+      position:c.position,pad:c.pad,icon:PADS[c.pad].icon,name:PADS[c.pad].name
+   })):[],
+   pads:PADS,mistakes:g.mistakes};
+ }
  if(g.kind==='pulse')return {...base,charges:g.charges,goal:g.goal,cycleMs:g.cycleMs,
   startedAt:g.startedAt,targetRange:g.targetRange};
  if(g.kind==='pipe'){

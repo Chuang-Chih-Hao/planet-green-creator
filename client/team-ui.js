@@ -11,13 +11,20 @@ function actionButton(s,g,text,opts={}) {
 }
 function body(s,g){
  if(g.kind==='memory'){
-  const reveal=!g.hidden;
-  const preview='<div class="coop-memory-sequence">'
-   +Array.from({length:g.length},(_,i)=>'<span class="'+(i<g.step?'passed':'')+'">'+(i<g.step?'✓':reveal?g.pads[g.sequence[i]].icon:'❔')+'</span>').join('')+'</div>';
-  return '<div class="coop-instructions"><strong>🔍 觀察 → 記住 → 輪流完成</strong><p>全隊先記住順序，提示消失後請輪到的人按下對應節點。其他同學可以口頭提醒。</p></div>'
-   +preview
-   +'<p class="coop-meter">已完成 '+g.step+' / '+g.length+' 個節點'+(reveal?' · 記憶時間 <span data-memory-clock></span>':' · 現在可以接力')+'</p>'
-   +'<div class="coop-pads">'+g.pads.map((p,i)=>actionButton(s,g,'<span>'+p.icon+'</span><strong>'+h(p.name)+'</strong>',{index:i,cls:'coop-pad pad-'+i,off:reveal})).join('')+'</div>';
+  const total=g.length,step=g.step+1;
+  const preview='<div class="coop-memory-sequence" aria-label="全隊合作序列進度">'
+   +Array.from({length:total},(_,i)=>'<span class="'+(i<g.step?'passed':i===g.step?'current':'')+'" title="第'+(i+1)+'格">'+(i<g.step?'✓':i===g.step?'➤':'?')+'</span>').join('')+'</div>';
+  const mine=g.myClues||[];
+  const clueCards=mine.length?mine.map(c=>'<div class="coop-private-clue"><span class="coop-clue-index">第 '+c.position+' 格</span><strong>'+c.icon+' '+h(c.name)+'</strong></div>').join(''):'<p class="coop-no-clue">老師的畫面不顯示答案。請學生在各自畫面查看所持線索。</p>';
+  const solo=g.teammates.length===1;
+  const guide=solo?'單人練習：你能看到所有位置的線索，照著順序逐格完成。'
+    :'每位學生只會看到自己負責的兩張線索。<strong>不要盲猜！</strong>持有線索的同學必須先口頭告訴操作員，再由輪到的人點選。';
+  return '<div class="coop-instructions"><strong>🌱 線索接力：大家拼出完整順序</strong><p>① 查看自己的「私人線索」　② 由掌握第 '+step+' 格的人念出符號　③ 輪到的人在下方按相同符號</p><p>'+guide+'</p></div>'
+    +'<div class="coop-memory-guide"><div><span>目前做到</span><strong>第 '+step+' / '+total+' 格</strong></div><div><span>這一格線索在誰手上？</span><strong>'+h(g.clueHolderName||'隊友')+'</strong></div><div><span>誰負責點選？</span><strong>'+h(g.turnName)+'</strong></div></div>'
+    +preview
+    +'<div class="coop-personal-clues"><div class="coop-clue-heading"><strong>🔐 '+(s.role==='student'?'只有你看得到的線索':'學生各自持有線索')+'</strong><small>每一格都有確定答案，請把資訊說給隊友聽</small></div><div class="coop-private-cards">'+clueCards+'</div></div>'
+    +'<p class="coop-meter">已完成 '+g.step+' 格／共 '+total+' 格 · 目前猜錯 '+g.mistakes+' 次（可以重試，不扣資源）</p>'
+    +'<div class="coop-pads">'+g.pads.map((p,i)=>actionButton(s,g,'<span>'+p.icon+'</span><strong>'+h(p.name)+'</strong>',{index:i,cls:'coop-pad pad-'+i})).join('')+'</div>';
  }
  if(g.kind==='pulse'){
   const left=Math.round(g.targetRange[0]*100),width=Math.round((g.targetRange[1]-g.targetRange[0])*100);

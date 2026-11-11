@@ -96,34 +96,65 @@ test('一至五人所需數學工程比舊版少，且六款合作遊戲分布�
  assert.equal(goalForCount(4,15),8);
  assert.deepEqual(TEAM_GAMES,{1:['memory','pulse'],2:['pipe','rover'],3:['defense','mosaic']});
 });
-test('四類工程保持數值題、觀念題、是非題及一位小數',()=>{
+test('四類工程 40 種計算題全改估算四選一，觀念題也有四選項',()=>{
  for(const kind of ['forest','orbit','crater','power']){
-  assert.equal(TASK_VARIANTS[kind].length,10);assert.equal(CONCEPT_VARIANTS[kind].length,2);
+  assert.equal(TASK_VARIANTS[kind].length,10);
+  assert.equal(CONCEPT_VARIANTS[kind].length,2);
   assert.ok(TASK_SCENARIOS[kind].length>=8);
   for(let i=0;i<10;i++){
    const t=makeTask(kind,'advanced',()=>(i+.01)/12);
-   assert.ok(Number.isFinite(t.answer)&&t.answer>0&&t.answer<=314);
-   assert.ok(Math.abs(t.answer*10-Math.round(t.answer*10))<1e-7);
+   assert.equal(t.type,'choice');
+   assert.equal(t.choices.length,4);
+   assert.equal(new Set(t.choices.map(x=>x.label)).size,4,'估算的選項不能重複');
+   assert.ok(t.choices.some(x=>x.value===t.answer));
+   assert.match(t.question,/π ≈ 3/);
+   assert.ok(t.steps?.some(x=>x.includes('≈')));
+   assert.equal(t.formula,null);
+   assert.equal(t.unit,null);
   }
+  const concept=makeTask(kind,'advanced',()=>10.05/12);
+  const tf=makeTask(kind,'advanced',()=>11.05/12);
+  assert.equal(concept.type,'choice');
+  assert.equal(concept.choices.length,4);
+  assert.equal(tf.type,'trueFalse');
+  assert.equal(tf.choices.length,2);
  }
  assert.ok(FORMULAS.some(f=>f.id==='reverseArea'&&f.text.includes('面積 ÷ π')));
 });
-test('漏選單位不扣分；觀念題不必選公式和單位',()=>{
+test('估算答案為數值最接近的選項，答錯得到方法提示，未選選項不記錯',()=>{
  const {room,players:[p]}=roomWith();startRoom(room);
- p.task=makeTask('forest','advanced',()=>0);
- let t=p.task,prev=p.answered;
- let res=buildResult(room,p,{taskId:t.id,answer:t.answer,formula:t.formula,unit:''});
- assert.equal(res.reason,'missingUnit');assert.equal(p.answered,prev);
- res=buildResult(room,p,{taskId:t.id,answer:t.answer,formula:t.formula,unit:t.unit});
- assert.equal(res.correct,true);
- p.lastAnswerAt=0;p.task=makeTask('power','advanced',()=>10.05/12);t=p.task;
- assert.equal(t.type,'choice');
+ const t=makeTask('forest','advanced',()=>0);
+ p.task=t;
+ const values=t.choices.map(x=>parseFloat(x.label));
+ const correct=values[['A','B','C','D'].indexOf(t.answer)];
+ const r=Number(t.question.match(/半徑為 (\d+)/)?.[1]);
+ assert.equal(r,4);
+ const exact=3.14*r*r;
+ assert.ok(values.every(x=>Math.abs(correct-exact)<=Math.abs(x-exact)));
+ const prev=p.answered;
+ const blank=buildResult(room,p,{taskId:t.id,answer:''});
+ assert.equal(blank.reason,'missingChoice');
+ assert.equal(p.answered,prev);
  const other=t.choices.find(x=>x.value!==t.answer);
- res=buildResult(room,p,{taskId:t.id,answer:other.value});
- assert.equal(res.reason,'concept');
+ const wrong=buildResult(room,p,{taskId:t.id,answer:other.value});
+ assert.equal(wrong.reason,'estimate');
+ assert.match(wrong.message,/估算/);
  p.lastAnswerAt=0;
- res=buildResult(room,p,{taskId:t.id,answer:t.answer});
- assert.equal(res.correct,true);
+ const right=buildResult(room,p,{taskId:t.id,answer:t.answer});
+ assert.equal(right.correct,true);
+ assert.equal(p.answered,prev+2);
+});
+test('每次抽題有不同數字與選項，最近 32 題減少重複',()=>{
+ let seed=91013;
+ const rng=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
+ for(const kind of ['forest','orbit','crater','power']){
+  const recent=[],questions=[];
+  for(let i=0;i<70;i++){
+    const t=makeTask(kind,'advanced',rng,null,recent);
+    if(t.context?.startsWith('估算任務')) questions.push(t.question);
+  }
+  assert.ok(new Set(questions).size>=40,kind+' 的題目應有明顯不同的數字組合');
+ }
 });
 test('第一關數學完成後立刻自動開始記憶接力，建造被鎖定',()=>{
  const {room,players:[p]}=roomWith();room.durationMinutes=15;startRoom(room);
@@ -140,15 +171,49 @@ test('第一關數學完成後立刻自動開始記憶接力，建造被鎖定',
  assert.equal(room.stage,2);assert.equal(room.teamGame,null);
  assert.equal(room.teamGamesCompleted[1],2);
 });
-test('記憶遊戲預覽結束後不可讀到隱藏的正確順序',()=>{
- const {room,players:[p]}=roomWith();room.phase='playing';
- startTeamGame(room);
- const before=publicState(room,p.token).teamGame;
- assert.equal(before.sequence.length,room.teamGame.sequence.length);
- room.teamGame.revealUntil=Date.now()-1;
- assert.equal(tickTeamGame(room),true);
- const after=publicState(room,p.token).teamGame;
- assert.equal(after.sequence,null);assert.equal(after.hidden,true);
+test('記憶接力：每位學生只看到自己的兩個位置線索，且答案不會外洩',()=>{
+ for(const n of [2,3,4,5]){
+  const {room,players}=roomWith(n);
+  room.phase='playing';
+  const game=startTeamGame(room);
+  assert.equal(game.sequence.length,n*2);
+  const all=new Set();
+  for(const player of players){
+   const st=publicState(room,player.token).teamGame;
+   assert.equal(st.myClues.length,2);
+   assert.equal(st.sequence,null);
+   assert.equal(st.hidden,true);
+   for(const clue of st.myClues){
+     assert.equal(game.sequence[clue.position-1],clue.pad);
+     all.add(clue.position);
+   }
+  }
+  assert.equal(all.size,n*2);
+  const host=publicState(room,room.hostToken).teamGame;
+  assert.equal(host.myClues.length,0,'老師投影畫面不應自動出現所有答案');
+  assert.equal(host.sequence,null);
+  const opener=players[0],clueOwner=players[1];
+  assert.equal(publicState(room,opener.token).teamGame.clueHolderName,clueOwner.name);
+  assert.equal(publicState(room,opener.token).teamGame.turnName,opener.name);
+ }
+ const {room,players:[only]}=roomWith();
+ room.phase='playing';startTeamGame(room);
+ assert.equal(publicState(room,only.token).teamGame.myClues.length,4,'單人練習不能卡關');
+});
+test('有線索才可按：猜錯不會跳步，答對由另一位隊友接力',()=>{
+ const {room,players:[p1,p2]}=roomWith(2);
+ room.phase='playing';const g=startTeamGame(room);
+ const wrongPad=(g.sequence[0]+1)%4;
+ let result=playTeamGame(room,p1,{gameId:g.id,index:wrongPad});
+ assert.equal(result.completed,false);
+ assert.equal(g.step,0);
+ assert.equal(g.mistakes,1);
+ assert.match(result.message,/線索/);
+ result=playTeamGame(room,p1,{gameId:g.id,index:g.sequence[0]});
+ assert.equal(g.step,1);
+ assert.equal(g.turnIndex,1);
+ assert.throws(()=>playTeamGame(room,p1,{gameId:g.id,index:g.sequence[1]}),/輪到/);
+ assert.doesNotThrow(()=>playTeamGame(room,p2,{gameId:g.id,index:g.sequence[1]}));
 });
 test('多人輪流操作：不是指定同學不可搶先作答，逾時可代替',()=>{
  const {room,players:[p1,p2]}=roomWith(2);room.phase='playing';

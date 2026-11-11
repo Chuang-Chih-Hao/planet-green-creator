@@ -335,3 +335,24 @@
 .coop-turn,.coop-pad span,.coop-pulse-target,.coop-maze-cell.rover,.coop-meteor{animation:none!important}
 .coop-pulse-cursor{transition:none!important}
 }
+
+/* V1.7: estimation choice boards and genuinely distributed cooperative memory clues. */
+.quiz-choices{grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.quiz-choice{min-height:74px;font-size:15px;line-height:1.5}
+.quiz-choice input{flex-shrink:0;width:18px;height:18px}
+.coop-memory-guide{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:15px 0}
+.coop-memory-guide>div{border:1px solid #4a8195;background:#173a52;border-radius:12px;padding:13px;text-align:center}
+.coop-memory-guide span{font-size:11px;color:#afd4e1;display:block}
+.coop-memory-guide strong{font-size:16px;color:#c9ffe8;display:block;margin-top:7px}
+.coop-memory-sequence span.current{border:2px solid #ffe090;background:#665027;color:#fff2af;box-shadow:0 0 17px #f3cf6d56}
+.coop-personal-clues{background:#163a3f;border:2px solid #76cbb1;border-radius:15px;padding:17px;margin:18px auto}
+.coop-clue-heading{display:flex;justify-content:space-between;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:13px}
+.coop-clue-heading strong{font-size:15px;color:#ccffec}
+.coop-clue-heading small{font-size:11px;color:#b8ddcf}
+.coop-private-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.coop-private-clue{padding:15px;border-radius:13px;border:1px solid #b6e9cb;background:radial-gradient(circle at 10% 0,#396452,#244c4a);display:flex;flex-direction:column;align-items:center;gap:10px}
+.coop-clue-index{font-size:13px;font-weight:800;color:#f4e4a5}
+.coop-private-clue strong{font-size:20px;color:#f0fff8}
+.coop-no-clue{font-size:13px;color:#c3decf}
+@media(max-width:650px){.coop-memory-guide{grid-template-columns:1fr 1fr}.coop-memory-guide>div:last-child{grid-column:1/-1}}
+@media(max-width:480px){.quiz-choices{grid-template-columns:1fr}.coop-private-cards{grid-template-columns:1fr 1fr;gap:7px}.coop-private-clue{padding:12px 5px}.coop-private-clue strong{font-size:16px}}
