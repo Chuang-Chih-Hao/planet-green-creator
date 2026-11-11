@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { makeVariedTask } from './tasks-v3.js';
 import { makeEventTask } from './event-tasks.js';
-import { STAGES, stageInfo, mathStageGoals, modeGoalList, modeProgress, lifeIndex, HAZARD_INFO } from './modes-v2.js';
+import { STAGES, stageInfo, mathStageGoals, modeGoalList, modeProgress, lifeIndex, HAZARD_INFO, coreResourcesReady, CORE_RESOURCE_KEYS } from './modes-v2.js';
 import { makeReviewQuestions, reviewPublicQuestions, gradeReview } from './review.js';
 import { makeAdventure, techBuildBonus, publicAdventure } from './adventure.js';
 import { TEAM_GAMES, startTeamGame, playTeamGame, publicTeamGame, tickTeamGame } from './team-games.js';
@@ -118,7 +118,7 @@ export function createRoom(code, hostName = '老師', options = {}) {
     code, hostName: cleanName(hostName) || '老師', hostToken: randomUUID() + randomUUID(),
     createdAt: Date.now(), updatedAt: Date.now(), phase: 'lobby', paused: false,
     durationMinutes: Math.min(MAX_GAME_MINUTES,Math.max(1,Number(options.durationMinutes)||30)), remainingSeconds: Math.min(MAX_GAME_MINUTES,Math.max(1,Number(options.durationMinutes)||30))*60,
-    eventsEnabled: true, difficulty: 'standard', stage: 1, stageChallengesResolved: 0, stageHistory: [], players: [], history: [], structures: [],
+    eventsEnabled: true, difficulty: 'standard', stage: 1, stageChallengesResolved: 0, stageHistory: [], coreChargeStarted:false, players: [], history: [], structures: [],
     hazards: [], eventsWon: 0, tickCount: 0, lastEventVariants: {},
     event: null, eventIndex: 0, lastEventId: null, eventCountdown: EVENT_INTERVAL_SECONDS, startingPlayers: 0,
     requiredBuildings: 4, resources: { oxygen: 20, water: 30, energy: 25, stability: 70 },
@@ -147,7 +147,7 @@ export function startRoom(room) {
   if (!room.players.length) throw new Error('至少需要 1 位學生才能開始');
   room.durationMinutes=Math.min(MAX_GAME_MINUTES,room.durationMinutes);
   room.phase = 'playing'; room.paused = false; room.pausedAt=null;
-  room.stage = 1; room.stageChallengesResolved = 0; room.stageHistory=[];room.adventure=makeAdventure();room.teamGame=null;room.teamGamesCompleted={1:0,2:0,3:0};
+  room.stage = 1; room.stageChallengesResolved = 0; room.stageHistory=[];room.coreChargeStarted=false;room.adventure=makeAdventure();room.teamGame=null;room.teamGamesCompleted={1:0,2:0,3:0};
   room.startingPlayers = room.players.length;
   room.requiredBuildings = goalForCount(room.startingPlayers, room.durationMinutes);
   room.remainingSeconds = room.durationMinutes * 60;
@@ -235,13 +235,19 @@ export function buildResult(room, player, submitted) {
   player.correct++;
   const earned = player.hintUsed ? 8 : 12;
   player.stars += earned;
-  const changes = {
-    forest: { oxygen: 8, water: -3 },
-    orbit: { energy: 5, stability: 4 },
-    crater: { energy: -2, water: 7, stability: 6 },
-    power: { energy: 14, water: -1, stability: 2 }
+  // 4-5 students: roughly three constructions per engineering kind suffice
+  // alongside the six co-op games. Smaller classes receive proportionally
+  // larger gains so the 30-minute time limit remains achievable.
+  const buildingGains = {
+    forest: { oxygen: 20, water: 2, stability: 1 },
+    orbit: { oxygen: 1, water: 1, energy: 4, stability: 5 },
+    crater: { oxygen: 2, water: 18, energy: 1, stability: 6 },
+    power: { oxygen: 1, water: 1, energy: 19, stability: 2 }
   };
-  adjustResources(room.resources, changes[task.kind]);
+  const count=Math.max(1,room.startingPlayers||room.players.length);
+  const multiplier=count<4?Math.min(2.5,4/count):1;
+  const gain=Object.fromEntries(Object.entries(buildingGains[task.kind]).map(([key,value])=>[key,Math.round(value*multiplier)]));
+  adjustResources(room.resources,gain);
   adjustResources(room.resources,techBuildBonus(room,task.kind));
   // 異常會持續削減資源，直到對應工程被完成；即使事件倒數已結束仍有效。
   for (const hazard of room.hazards) {
@@ -324,11 +330,20 @@ export function checkWin(room) {
    }
    return false;
  }
+ // All six co-op games can finish before the ecosystem is fully restored.
+ // Continue ordinary math construction until all four bars are exactly 100/100.
+ if(!coreResourcesReady(room)){
+   if(!room.coreChargeStarted){
+     room.coreChargeStarted=true;
+     log(room,'system','🎯 六款合作遊戲完成！進入最終生命核心充能：氧氣、水資源、能源、穩定度四項都必須達到 100/100。請繼續分工建造。');
+   }
+   return false;
+ }
  room.phase='finished';room.paused=false;room.teamGame=null;
- room.result={win:true,title:'生命核心啟動成功！',description:'全隊依序完成三段數學建設與六款合作小遊戲，星球恢復生機。請完成課後數學回顧。'};
+ room.result={win:true,title:'生命核心啟動成功！',description:'全隊完成三段數學建設、六款合作小遊戲，且氧氣、水資源、能源、星球穩定度全部達到 100/100。請欣賞完成的星球並進行課後數學回顧。'};
  room.stageHistory.push({stage:3,title:stageInfo(room).title,finishedAt:Date.now()});
  prepareReviews(room);
- log(room,'victory','🌍 全隊完成三關數學與六款合作挑戰，進入課後數學回顧！');
+ log(room,'victory','🌍 四項生命指標全數達到 100/100，三關與六款合作挑戰全部完成，生命核心成功啟動！');
  return true;
 }
 
@@ -397,7 +412,8 @@ export function failEvent(room) {
 export function finishRoom(room, reason = '老師已結束本局') {
   if (room.phase === 'finished') return;
   room.phase = 'finished'; room.event = null; room.teamGame=null; room.paused = false;
-  room.result = { win: false, title: '星球探索告一段落', description: reason+' 現在可以完成課後數學回顧。' };
+  const deficit=room.stage===3?CORE_RESOURCE_KEYS.filter(k=>room.resources[k]<100).map(k=>({oxygen:'氧氣',water:'水資源',energy:'能源',stability:'穩定度'}[k])+` ${room.resources[k]}/100`).join('、'):'';
+  room.result = { win: false, title: '星球探索告一段落', description: reason+(deficit?' 尚未充滿：'+deficit+'。':'')+' 現在可以完成課後數學回顧。' };
   prepareReviews(room);
   log(room, 'system', reason);
 }
@@ -405,7 +421,7 @@ export function finishRoom(room, reason = '老師已結束本局') {
 export function resetRoom(room) {
   room.phase = 'lobby'; room.paused = false; room.pausedAt=null; room.remainingSeconds = room.durationMinutes * 60;
   room.event = null; room.teamGame=null; room.teamGamesCompleted={1:0,2:0,3:0}; room.eventIndex = 0; room.lastEventId = null; room.eventCountdown = EVENT_INTERVAL_SECONDS;
-  room.hazards = []; room.eventsWon = 0; room.tickCount = 0; room.lastEventVariants = {}; room.stage=1; room.stageHistory=[];room.stageChallengesResolved=0;
+  room.hazards = []; room.eventsWon = 0; room.tickCount = 0; room.lastEventVariants = {}; room.stage=1; room.stageHistory=[];room.stageChallengesResolved=0;room.coreChargeStarted=false;
   room.structures = []; room.completed = { forest: 0, orbit: 0, crater: 0, power: 0 }; room.adventure=makeAdventure();
   room.resources = { oxygen: 20, water: 30, energy: 25, stability: 70 };
   room.result = null; room.startingPlayers = 0; room.requiredBuildings = goalForCount(room.players.length, room.durationMinutes);
@@ -422,9 +438,9 @@ export function tick(room) {
   if (room.phase !== 'playing' || room.paused) return false;
   room.remainingSeconds = Math.max(0, room.remainingSeconds - 1);
   room.tickCount++;
-  if (room.stage === 3 && room.tickCount % 45 === 0) {
+  if (room.stage === 3 && room.tickCount % 90 === 0) {
     adjustResources(room.resources, { water: -1, energy: -1 });
-    log(room, 'warning', '文明守護：維生系統每 45 秒消耗 1 水資源與 1 能源。');
+    log(room, 'warning', '文明守護：維生系統每 90 秒消耗 1 水資源與 1 能源。');
   }
   tickTeamGame(room);
   if (room.event) {

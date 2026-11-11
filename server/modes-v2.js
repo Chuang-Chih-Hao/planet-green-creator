@@ -5,6 +5,9 @@ export const STAGES = [
   { id:3, title:'文明守護', emoji:'🛡️', subtitle:'建立星環、共同攔截隕石與修復星圖', problem:'隕石群正在逼近！完成數學防護工程後，大家要合作攔截隕石並修復星圖。' }
 ];
 export const STAGE_COUNT = STAGES.length;
+export const CORE_RESOURCE_TARGET=100;
+export const CORE_RESOURCE_KEYS=['oxygen','water','energy','stability'];
+export const coreResourcesReady=room=>CORE_RESOURCE_KEYS.every(key=>room.resources[key]>=CORE_RESOURCE_TARGET);
 export const stageInfo = room => STAGES[Math.max(0,Math.min(STAGE_COUNT-1,(room.stage||1)-1))];
 export const GAME_MODES = {}; // 舊版相容性匯出，不再用於設定／通關。
 
@@ -50,6 +53,13 @@ export function stageGoalList(room) {
  const goals=mathStageGoals(room);
  const done=room.teamGamesCompleted?.[room.stage]||0,total=TEAM_GAMES[room.stage].length;
  goals.push({id:'team',text:'與隊友依序完成 '+total+' 個合作小遊戲（目前 '+done+'/'+total+'）',met:done>=total});
+ if(room.stage===3){
+  const coreNames={oxygen:'🌳 氧氣',water:'💧 水資源',energy:'⚡ 能源',stability:'🛡️ 星球穩定度'};
+  for(const key of CORE_RESOURCE_KEYS){
+    goals.push({id:'core-'+key,text:'生命核心啟動 — '+coreNames[key]+' '+Math.min(100,room.resources[key])+'/100（需 100/100）',
+       met:room.resources[key]>=CORE_RESOURCE_TARGET});
+  }
+ }
  const labels={
   buildings:'📐 四種建造合計',forest:'🌳 森林',power:'⚡ 能源',
   crater:'🛠️ 修復',orbit:'🛰️ 星環',variety:'🌳⚡🛠️🛰️ 各建一次',
@@ -57,7 +67,7 @@ export function stageGoalList(room) {
   energy:'⚡ 能源補充電力',stability:'🛠️ 修復 / 🛰️ 星環提升穩定度',
   hazards:'☄️ 事件受損後，依異常提示建設對應工程',team:'🎮 階段合作小遊戲'
  };
- return goals.map(goal=>({...goal,text:(labels[goal.id]||'📋 本關目標')+'：'+goal.text}));
+ return goals.map(goal=>({...goal,text:goal.id.startsWith('core-')?goal.text:(labels[goal.id]||'📋 本關目標')+'：'+goal.text}));
 }
 export const modeGoalList=stageGoalList;
 export function modeProgress(room) {

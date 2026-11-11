@@ -225,3 +225,22 @@ test('V1.9 星球渲染器為可由瀏覽器讀取的模組，地貌由資源更
  assert.doesNotMatch(app,/class="planet-building/);
  assert.match(css,/\.planet-sphere\.planet-sphere-canvas/);
 });
+
+
+test('V1.10 學生與老師能看到生命核心四資源 100/100 目標與尚未達標進度',async()=>{
+ const host=await post('create',{name:'資源指標教師'});
+ const one=await post('join',{name:'小安',code:host.state.code});
+ await post('action',{token:host.token,action:'start'});
+ const [student,teacher,app]=await Promise.all([
+  state(one.token),state(host.token),fetch(base+'/app.js').then(r=>r.text())
+ ]);
+ assert.equal(student.resources.oxygen,20);
+ assert.equal(student.resources.water,30);
+ assert.equal(student.resources.energy,25);
+ assert.equal(student.resources.stability,70);
+ assert.equal(student.phase,'playing');
+ assert.match(app,/core-readiness/);
+ assert.match(app,/100\/100/);
+ assert.match(app,/六款合作遊戲已完成/);
+ assert.equal(teacher.result,null,'未達標時不得有勝利結算');
+});

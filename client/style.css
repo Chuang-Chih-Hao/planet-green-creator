@@ -428,3 +428,10 @@
 .finish-summary-body p{margin:0;color:#c5e5e0;font-size:12px;line-height:1.8}
 .finish-summary-body .finish-summary-tip{margin-top:8px;color:#90e9cb;font-size:11px}
 @media(max-width:600px){.finish-summary{padding:16px;gap:12px}.finish-summary-icon{width:44px;height:44px;font-size:23px}.finish-summary-body h2{font-size:17px}}
+
+/* V1.10 — show strict four-resource life-core activation progress. */
+.core-readiness{margin:13px 0;padding:13px;border:1px solid #507f87;border-radius:12px;background:linear-gradient(125deg,#163341,#1b4050);display:flex;flex-wrap:wrap;justify-content:space-between;gap:7px}
+.core-readiness>strong:first-child{color:#c8f9e8;font-size:13px}
+.core-readiness>strong:nth-child(2){color:#a0e5ff;font-size:13px}
+.core-readiness p{flex-basis:100%;font-size:11px;color:#d1e5e7;line-height:1.65;margin:0}
+.core-readiness b{color:#e0ffe9}
